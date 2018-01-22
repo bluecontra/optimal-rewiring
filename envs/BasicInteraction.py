@@ -1,7 +1,7 @@
 import envs.BasicEnv as Env
 import random
 # Params
-INTERACTION_ROUND = 100000
+INTERACTION_ROUND = 1000
 
 AGENT_NUM = 100
 BANDWIDTH = 5
@@ -37,7 +37,7 @@ if __name__ == '__main__':
         phi = env.phi
 
         for iteration in range(INTERACTION_ROUND):
-            # print('Interaction round: ', iteration)
+            print('-- Interaction round: ', iteration)
             # to avoid the the problem that decision order may influence the fairness
             # shuffle the order at every iteration
             agents = env.network.nodes()
@@ -46,10 +46,27 @@ if __name__ == '__main__':
 
             # rewiring phase
             # print('Rewiring phase.')
+
+            # do rewiring
+            # should be good with sparse rewiring
             for i in agents:
+                agent = env.network.node[i]
                 if random.uniform(0, 1) < phi:
-                    # do rewire
-                    env._rewire(i)
+                    neighbors_num = len(env.network.neighbors(i))
+                    # print(network.neighbors(i))
+                    if neighbors_num > 0:
+                        if agent['S_'] != []:
+                            # do rewire
+                            print('Agent ' + str(i) + ' does rewiring.')
+                            env._rewire(i)
+                        else:
+                            print('No more available potential peers.')
+                    else:
+                        print('Agent ' + str(i) + ' is isolated.')
+            # TO-DO
+            # more reasonable situation, but complex
+            # 1) raise rewiring proposals.
+            # 2) decide rewiring target
 
             # interaction phase
             # print('Interaction phase.')

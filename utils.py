@@ -8,27 +8,27 @@ def calculateIndex(a, b, c, sight):
         z = b - math.sqrt(2*c/sight*(b-a))
     return z
 
-def calculateLambdaIndex(a, b, c, sight, y, yy):
+def calculateLambdaIndex(a, b, sight, y, yy):
     lam = 0
 
     if y >= b:
-        lam = (a + b)/2 - y - c/sight
+        lam = (a + b)/2 - y
     if y <= a:
         if yy <= a:
-            lam = yy - y -c / sight
+            lam = yy - y
         if yy >= b:
-            lam = (a + b) / 2 - y - c / sight
+            lam = (a + b) / 2 - y
         if yy > a and yy < b:
             yy_ = (yy*yy - a*a) / (2*(b - a)) + yy*(b-yy) / (b - a)
-            lam = yy_ - y -c /sight
+            lam = yy_ - y
     if y > a and y < b:
         # if yy <= a:
         #     lam = (y*y - a*a)/2 + yy*(b - c) - y - c / sight
         if yy >= b:
-            lam = (a + b) / 2 - y - c / sight
+            lam = (a + b) / 2 - y
         if yy > a and yy < b:
             yy_ = (yy * yy - a * a) / (2*(b - a)) + yy * (b - yy) / (b - a)
-            lam = (y*y - a*a) / (2*(b - a)) - yy_*(b - y) / (b - a) - y - c/sight
+            lam = (y*y - a*a) / (2*(b - a)) - yy_*(b - y) / (b - a) - y
 
     return lam
 
@@ -36,9 +36,6 @@ from sympy import integrate
 from sympy.abc import x
 
 def calculateBetaFunction(a,b):
-    # print(a)
-    # print(b)
-
     z = integrate(pow(x, a - 1) * pow(1 - x, b - 1), (x, 0, 1))
     # print(z)
     return z
@@ -53,15 +50,15 @@ def calculateNewBaselineInBeta(a, b, yy, B, p):
 
     return y_
 
-def calculateLambdaIndexInBeta(a, b, c, sight, y, yy, p):
+def calculateLambdaIndexInBeta(a, b, sight, y, yy, p):
     lam = 0
     a = int(a)
     b = int(b)
-    B = calculateBetaFunction(a,b)
+    B = calculateBetaFunction(a, b)
     part1 = integrate(pow(x, a) * pow(1 - x, b - 1), (x, 0, y))
     part2 = integrate(pow(x, a - 1) * pow(1 - x, b - 1), (x, y, 1))
     y_ = calculateNewBaselineInBeta(a, b, yy, B, p)
-    lam = p * (part1 + y_ * part2) / B - y - c/sight
+    lam = p * (part1 + y_ * part2) / B - y
 
     return lam
 
@@ -79,13 +76,18 @@ def initSingleGame(distribution_type):
         while (a2 >= b2):
             a2 = random.uniform(0, 1)
             b2 = random.uniform(0, 1)
+
     elif distribution_type == 1:
         a1 = random.randint(1, 10)
         b1 = random.randint(1, 10)
         a2 = random.randint(1, 10)
         b2 = random.randint(1, 10)
 
-    return a1, b1, a2, b2
+    # alpha in (-0.2, 0.0)
+    al = -random.uniform(0, 0.2)
+    al2 = -random.uniform(0, 0.2)
+
+    return a1, b1, a2, b2, al, al2
 
 def sampleTrueRewardFromDistribution(distribution_type, a1, b1, a2, b2):
     a, b = 0, 0
@@ -101,7 +103,7 @@ def sampleTrueRewardFromDistribution(distribution_type, a1, b1, a2, b2):
 # calculate the best response when player1 facing player2, game on edge (i,j)
 # p is for the p1's estimation over p2's policy
 def calculateBestResponse(g, p):
-    if p * g[0, 0] >= (1 - p) * g[1, 1]:
+    if p * g[0, 0] + (1 - p) * g[0, 1] >= p * g[1, 0] + (1 - p) * g[1, 1]:
         br = 0
     else:
         br = 1
