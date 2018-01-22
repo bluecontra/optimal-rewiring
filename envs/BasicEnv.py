@@ -192,7 +192,7 @@ class BasicEnv(object):
             N.node[i]['rewiring_time'] = 0
 
             # 0 for BR, 1 for WoLF, 2 for JAL
-            N.node[i]['gaming_strategy'] = 0
+            N.node[i]['gaming_strategy'] = 2
             # init game_strategy
             # ran = random.uniform(0, 1)
             # if ran <= 1 / 3:
@@ -246,7 +246,7 @@ class BasicEnv(object):
         self.network.edge[i][j]['game'] = gameMatrix
 
         self.network.edge[i][j]['policy_pair'] = [0.5, 0.5]
-        self.network.edge[i][j]['avg_policy_pair'] = [0.0, 0.0]
+        self.network.edge[i][j]['avg_policy_pair'] = [0.5, 0.5]
 
         # q_table_pair = np.array([[0.0,0.0], [0.0,0.0]])
         q_table_pair = np.array([[0.0, 0.0, 0.0, 0.0], [0.0, 0.0, 0.0, 0.0]])
@@ -268,3 +268,29 @@ class BasicEnv(object):
             subDis = np.random.random(size=self.agent_num)
             oppActionDis.append(subDis)
         return np.matrix(oppActionDis)
+
+    def printAgentInfo(self):
+        group_reward = []
+        group_rewiring = 0.0
+
+        print('')
+        print('Agents info below.')
+        print('----------------------------------')
+
+        for agent in self.network.nodes():
+            print('Agent: ' + str(agent))
+            print('  Neighbors: ' + str(self.network.neighbors(agent)))
+            print('  Rewiring time: ' + str(self.network.node[agent]['rewiring_time']))
+            print('  AR: ' + str(self.network.node[agent]['ar']))
+            print('  AC: ' + str(self.network.node[agent]['ac']))
+            print('  Reward: ' + str(self.network.node[agent]['ar'] - self.network.node[agent]['ac']))
+            print('----------------------------------')
+            group_reward.append(self.network.node[agent]['ar'] - self.network.node[agent]['ac'])
+            group_rewiring = group_rewiring + self.network.node[agent]['rewiring_time']
+
+        print('Group average rewiring time: ' + str(group_rewiring / self.agent_num))
+        print('Group average reward: ' + str(sum(group_reward) / self.agent_num))
+        print('Group highest reward: ' + str(max(group_reward)))
+        print('Group lowest reward: ' + str(min(group_reward)))
+
+        return group_reward, group_rewiring
