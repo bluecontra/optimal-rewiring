@@ -4,16 +4,20 @@ import random
 INTERACTION_ROUND = 1000
 
 AGENT_NUM = 100
-BANDWIDTH = 5
-NEIGHBORHOOD_SIZE = 10
+BANDWIDTH = 4
+NEIGHBORHOOD_SIZE = 12
 
-REWIRING_COST = 20
+REWIRING_COST = 40
 REWIRING_PROBABILITY = 0.01
+
+K = 4
+
+REWIRING_STRATEGY = 2
 
 NETWORK_TYPE = 0
 DISTRIBUTION_TYPE = 0
 
-EPISODE = 1
+EPISODE = 10
 
 average_reward = []
 highest_reward = []
@@ -32,7 +36,9 @@ if __name__ == '__main__':
                            NEIGHBORHOOD_SIZE,
                            REWIRING_COST,
                            REWIRING_PROBABILITY,
-                           DISTRIBUTION_TYPE)
+                           DISTRIBUTION_TYPE,
+                           REWIRING_STRATEGY,
+                           K)
 
         phi = env.phi
 
@@ -41,7 +47,7 @@ if __name__ == '__main__':
             # to avoid the the problem that decision order may influence the fairness
             # shuffle the order at every iteration
             agents = env.network.nodes()
-            random.shuffle(agents)
+            # random.shuffle(agents)
             # print('Env initialized.')
 
             # rewiring phase
@@ -52,10 +58,10 @@ if __name__ == '__main__':
             for i in agents:
                 agent = env.network.node[i]
                 if random.uniform(0, 1) < phi:
-                    neighbors_num = len(env.network.neighbors(i))
+                    neighbors_num = len(env.getNeighbors(i))
                     # print(network.neighbors(i))
                     if neighbors_num > 0:
-                        if agent['S_'] != []:
+                        if len(agent['S_'] + agent['BL']) > 0:
                             # do rewire
                             print('Agent ' + str(i) + ' does rewiring.')
                             env._rewire(i)
@@ -72,11 +78,11 @@ if __name__ == '__main__':
             # print('Interaction phase.')
             for i in env.network.nodes():
                 # do interaction
-                neighbors_num = len(env.network.neighbors(i))
-                if neighbors_num > 0:
+                neighborhood = env.getNeighbors(i)
+                if len(neighborhood) > 0:
                     # 1) randomly choose a opponent in S (choose the best opponent)
-                    oppo_index = random.randint(0, neighbors_num - 1)
-                    oppo_agent_no = env.network.neighbors(i)[oppo_index]
+                    oppo_index = random.randint(0, len(neighborhood) - 1)
+                    oppo_agent_no = neighborhood[oppo_index]
 
                     # sort the players
                     left = min(i, oppo_agent_no)
@@ -96,6 +102,8 @@ if __name__ == '__main__':
 
         average_rewiring = average_rewiring + group_rewiring / AGENT_NUM
 
+        # print(env.oppActionDis)
+
     print('--------------------------------------------------------------------')
     print('--------------------------------------------------------------------')
     print('Final outputs:')
@@ -103,3 +111,4 @@ if __name__ == '__main__':
     print('Mean average reward: ' + str(sum(average_reward) / EPISODE))
     print('Mean highest reward: ' + str(sum(highest_reward) / EPISODE))
     print('Mean lowest reward: ' + str(sum(lowest_reward) / EPISODE))
+

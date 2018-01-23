@@ -37,6 +37,7 @@ def initialNetworkTopology(agents_num, neighbors_num, bandwidth):
         N.node[i]['index_z_value_list'] = []
         N.node[i]['expected_value_list_S_'] = []
 
+
         N.node[i]['rebuild_mark'] = 0
         N.node[i]['rewiring_time'] = 0
 

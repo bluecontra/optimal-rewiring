@@ -8,6 +8,7 @@ def calculateIndex(a, b, c, sight):
         z = b - math.sqrt(2*c/sight*(b-a))
     return z
 
+# calculate lambda against baseline
 def calculateLambdaIndex(a, b, sight, y, yy):
     lam = 0
 
@@ -29,6 +30,55 @@ def calculateLambdaIndex(a, b, sight, y, yy):
         if yy > a and yy < b:
             yy_ = (yy * yy - a * a) / (2*(b - a)) + yy * (b - yy) / (b - a)
             lam = (y*y - a*a) / (2*(b - a)) - yy_*(b - y) / (b - a) - y
+
+    return lam
+
+# new
+# calculate lambda against max value instead of baseline
+def calculateLambdaIndexMax(a, b, sight, y):
+    lam = 0
+
+    if y >= b:
+        lam = 0
+        # print('y > b')
+    if y <= a:
+        lam = (a + b) / 2 - y
+    if y > a and y < b:
+        lam = (y*(y - a) + (b*b - y*y)/2) / (b-a)
+    return lam
+
+# calculate lambda against max value instead of baseline
+# in Beta distribution
+def calculateLambdaIndexMaxInBeta(a, b, sight, y, p):
+    lam = 0
+    a = int(a)
+    b = int(b)
+    B = calculateBetaFunction(a, b)
+    part1 = integrate(pow(x, a - 1) * pow(1 - x, b - 1), (x, 0, y))
+    part2 = integrate(pow(x, a) * pow(1 - x, b - 1), (x, y, 1))
+    lam = p * (part1 * y + part2) / B - y
+    return lam
+
+def calculateLambdaIndexNotBreak(a, b, sight, y):
+    lam = 0
+
+    if y >= b:
+        lam = (a + b)/2 - y
+    if y <= a:
+        lam = 0
+    if y > a and y < b:
+        lam = ((y * y - a * a) / 2 + (b - y) * y ) / (b - a) - y
+
+    return lam
+
+def calculateLambdaIndexInBetaNotBreak(a, b, sight, y, p):
+    lam = 0
+    a = int(a)
+    b = int(b)
+    B = calculateBetaFunction(a, b)
+    part1 = integrate(pow(x, a) * pow(1 - x, b - 1), (x, 0, y))
+    part2 = integrate(pow(x, a - 1) * pow(1 - x, b - 1), (x, y, 1))
+    lam = p * (part1 + y * part2) / B - y
 
     return lam
 

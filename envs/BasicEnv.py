@@ -10,7 +10,9 @@ class BasicEnv(object):
                  neighborhood_size,
                  rewiring_cost,
                  rewiring_probability,
-                 distribution_type):
+                 distribution_type,
+                 rewiring_strategy,
+                 K):
         self.foo = 0
 
         self.agent_num = agent_num
@@ -21,17 +23,20 @@ class BasicEnv(object):
         self.rewiring_cost = rewiring_cost
         self.phi = rewiring_probability
         self.distribution_type = distribution_type
-        self.rewiring_sight = 1 / self.phi
-
+        self.rewiring_sight = K / self.phi
+        self.rewiring_strategy = rewiring_strategy
         self.reward = None
 
         # initial the network and unknown reward distribution
         self.network = self._initialNetworkTopology()
+        self._initPotentialPeers()
+
         self.rewardDisMatrix = self._initialDistributingSetting()
         # initial the know game in S
         self._initialTheKnownGameInS()
         # initial the Policy for every agent pair
         self.oppActionDis = self._initialOpponentsActionDistribution()
+
 
     def _rewire(self, i):
         rewiring_strategy = self.network.node[i]['rewiring_strategy']
@@ -42,6 +47,8 @@ class BasicEnv(object):
             self._HERewire(i)
         else:
             self._OptimalRewire(i)
+        # else:
+            # self._OptimalRewireMax(i)
 
         return
 
@@ -55,18 +62,31 @@ class BasicEnv(object):
         if self._getRewiringResponse(rewiring_target, i) == 1:
             # do rewiring
             # unlink the worst neighbor if reach the limitation
-            current_neighbor_num = len(self.network.neighbors(i))
-            if current_neighbor_num == self.network.node[i]['max_conn_num']:
+
+            if len(self.getNeighbors(i)) == self.network.node[i]['max_conn_num']:
                 self._unlinkWorstNeighbor(i)
+
+            if len(self.getNeighbors(rewiring_target)) == self.network.node[rewiring_target]['max_conn_num']:
+                self._unlinkWorstNeighbor(rewiring_target)
 
             # rewire target
             # update information
-            self.network.node[i]['S_'].remove(rewiring_target) if rewiring_target in self.network.node[i]['S_'] \
-                else self.network.node[i]['BL'].remove(rewiring_target)
-            self.network.add_edge(i, rewiring_target)
+            print('Rewire agent', rewiring_target)
+            if rewiring_target in self.network.node[i]['S_']:
+                self.network.node[i]['S_'].remove(rewiring_target)
+                # TO-DO
+                if i in self.network.node[rewiring_target]['S_']:
+                    self.network.node[rewiring_target]['S_'].remove(i)
 
-            # reveal the reward matrix of the unknown agent and update
-            self._revealTheUnknownGameForEdge(i, rewiring_target)
+                self.network.add_edge(i, rewiring_target)
+                # reveal the reward matrix of the unknown agent and update
+                self._revealTheUnknownGameForEdge(i, rewiring_target)
+            else:
+                self.network.node[i]['BL'].remove(rewiring_target)
+                self.network.node[rewiring_target]['BL'].remove(i)
+            # enable the connection
+            self.network.edge[i][rewiring_target]['is_connected'] = 0
+
             # TO-DO
             # the rewiring pair shares the cost
             self.network.node[i]['ac'] += self.rewiring_cost / 2
@@ -81,26 +101,51 @@ class BasicEnv(object):
         # pick HE target
         # calculate the expected value of each neighbor in S' and get the maximum expected value ev
         self.network.node[i]['expected_value_list_S_'] = self.calculateHEValueInS_(i)
-        # TO-DO
         # calculate BL
+        self.network.node[i]['expected_value_list_BL'] = self.calculateExpectedRewardInBL(i)
 
-        rewiring_target = np.random.choice(np.array(self.network.node[i]['S_'] + self.network.node[i]['BL']))
+        # ev_m = max(self.network.node[i]['expected_value_list_S_']) > max(self.network.node[i]['expected_value_list_BL'])
+        max_v_S_ = 0 if self.network.node[i]['expected_value_list_S_'] == [] \
+            else max(self.network.node[i]['expected_value_list_S_'])
+        max_v_BL = 0 if self.network.node[i]['expected_value_list_BL'] == [] \
+            else max(self.network.node[i]['expected_value_list_BL'])
+        if max_v_S_ > max_v_BL:
+            ev_m = max_v_S_
+            ev_max_index = np.array(self.network.node[i]['expected_value_list_S_']).argmax()
+            rewiring_target = self.network.node[i]['S_'][ev_max_index]
+        else:
+            ev_m = max_v_BL
+            ev_max_index = np.array(self.network.node[i]['expected_value_list_BL']).argmax()
+            rewiring_target = self.network.node[i]['BL'][ev_max_index]
+
         # check if the rewiring target accept the proposal
-        if self._getRewiringResponse(rewiring_target, i) == 1:
+        if ev_m * self.rewiring_sight > self.rewiring_cost / 2 and self._getRewiringResponse(rewiring_target, i) == 1:
             # do rewiring
             # unlink the worst neighbor if reach the limitation
-            current_neighbor_num = len(self.network.neighbors(i))
-            if current_neighbor_num == self.network.node[i]['max_conn_num']:
+
+            if len(self.getNeighbors(i)) == self.network.node[i]['max_conn_num']:
                 self._unlinkWorstNeighbor(i)
+            if len(self.getNeighbors(rewiring_target)) == self.network.node[rewiring_target]['max_conn_num']:
+                self._unlinkWorstNeighbor(rewiring_target)
 
             # rewire target
             # update information
-            self.network.node[i]['S_'].remove(rewiring_target) if rewiring_target in self.network.node[i]['S_'] \
-                else self.network.node[i]['BL'].remove(rewiring_target)
-            self.network.add_edge(i, rewiring_target)
+            print('Rewire agent', rewiring_target)
+            if rewiring_target in self.network.node[i]['S_']:
+                self.network.node[i]['S_'].remove(rewiring_target)
+                # TO-DO
+                if i in self.network.node[rewiring_target]['S_']:
+                    self.network.node[rewiring_target]['S_'].remove(i)
 
-            # reveal the reward matrix of the unknown agent and update
-            self._revealTheUnknownGameForEdge(i, rewiring_target)
+                self.network.add_edge(i, rewiring_target)
+                # reveal the reward matrix of the unknown agent and update
+                self._revealTheUnknownGameForEdge(i, rewiring_target)
+            else:
+                self.network.node[i]['BL'].remove(rewiring_target)
+                self.network.node[rewiring_target]['BL'].remove(i)
+            # enable the connection
+            self.network.edge[i][rewiring_target]['is_connected'] = 0
+
             # TO-DO
             # the rewiring pair shares the cost
             self.network.node[i]['ac'] += self.rewiring_cost / 2
@@ -110,8 +155,129 @@ class BasicEnv(object):
             # do nothing
             print('Target agent ', rewiring_target, ' refused the rewiring.')
         return
+
     def _OptimalRewire(self, i):
+        # pick Optimal target
+
+        # calculate BL
+        self.network.node[i]['expected_value_list_BL'] = self.calculateExpectedRewardInBL(i)
+        # calculate the lambda value of each neighbor in S' and get the maximum expected value ev
+        self.network.node[i]['index_z_value_list'] = self.calculateLambdaInS_(i)
+
+        max_v_S_ = -1 if self.network.node[i]['index_z_value_list'] == [] \
+            else max(self.network.node[i]['index_z_value_list'])
+        max_v_BL = -1 if self.network.node[i]['expected_value_list_BL'] == [] \
+            else max(self.network.node[i]['expected_value_list_BL'])
+        print(max_v_S_, ' ', max_v_BL)
+        if max_v_S_ >= max_v_BL:
+            ev_m = max_v_S_
+            ev_max_index = np.array(self.network.node[i]['index_z_value_list']).argmax()
+            rewiring_target = self.network.node[i]['S_'][ev_max_index]
+        else:
+            ev_m = max_v_BL
+            ev_max_index = np.array(self.network.node[i]['expected_value_list_BL']).argmax()
+            rewiring_target = self.network.node[i]['BL'][ev_max_index]
+
+        # check if the rewiring target accept the proposal
+        if ev_m * self.rewiring_sight > self.rewiring_cost / 2:
+            if self._getRewiringResponse(rewiring_target, i) == 1:
+                # do rewiring
+                # unlink the worst neighbor if reach the limitation
+
+                if len(self.getNeighbors(i)) == self.network.node[i]['max_conn_num']:
+                    self._unlinkWorstNeighbor(i)
+                if len(self.getNeighbors(rewiring_target)) == self.network.node[rewiring_target]['max_conn_num']:
+                    self._unlinkWorstNeighbor(rewiring_target)
+
+                # rewire target
+                # update information
+                print('Rewire agent', rewiring_target)
+                if rewiring_target in self.network.node[i]['S_']:
+                    self.network.node[i]['S_'].remove(rewiring_target)
+                    # TO-DO
+                    if i in self.network.node[rewiring_target]['S_']:
+                        self.network.node[rewiring_target]['S_'].remove(i)
+
+                    self.network.add_edge(i, rewiring_target)
+                    # reveal the reward matrix of the unknown agent and update
+                    self._revealTheUnknownGameForEdge(i, rewiring_target)
+                else:
+                    self.network.node[i]['BL'].remove(rewiring_target)
+                    self.network.node[rewiring_target]['BL'].remove(i)
+                # enable the connection
+                self.network.edge[i][rewiring_target]['is_connected'] = 0
+
+                # TO-DO
+                # the rewiring pair shares the cost
+                self.network.node[i]['ac'] += self.rewiring_cost / 2
+                self.network.node[rewiring_target]['ac'] += self.rewiring_cost / 2
+                self.network.node[i]['rewiring_time'] += 1
+            else:
+                # do nothing
+                print('Target agent ', rewiring_target, ' refused the rewiring.')
+        else:
+            print('Rewiring not satisfying.')
         return
+
+    # def _OptimalRewireMax(self, i):
+    #     # pick Optimal target
+    #
+    #     # calculate BL
+    #     self.network.node[i]['expected_value_list_BL'] = self.calculateExpectedRewardInBL(i)
+    #     # calculate the lambda value of each neighbor in S' and get the maximum expected value ev
+    #     self.network.node[i]['index_z_value_list'] = self.calculateLambdaInS_(i)
+    #
+    #     max_v_S_ = -1 if self.network.node[i]['index_z_value_list'] == [] \
+    #         else max(self.network.node[i]['index_z_value_list'])
+    #     max_v_BL = -1 if self.network.node[i]['expected_value_list_BL'] == [] \
+    #         else max(self.network.node[i]['expected_value_list_BL'])
+    #     print(max_v_S_, ' ', max_v_BL)
+    #     if max_v_S_ >= max_v_BL:
+    #         ev_m = max_v_S_
+    #         ev_max_index = np.array(self.network.node[i]['index_z_value_list']).argmax()
+    #         rewiring_target = self.network.node[i]['S_'][ev_max_index]
+    #     else:
+    #         ev_m = max_v_BL
+    #         ev_max_index = np.array(self.network.node[i]['expected_value_list_BL']).argmax()
+    #         rewiring_target = self.network.node[i]['BL'][ev_max_index]
+    #
+    #     # check if the rewiring target accept the proposal
+    #     if ev_m * self.rewiring_sight > self.rewiring_cost / 2 and self._getRewiringResponse(rewiring_target, i) == 1:
+    #         # do rewiring
+    #         # unlink the worst neighbor if reach the limitation
+    #
+    #         if len(self.getNeighbors(i)) == self.network.node[i]['max_conn_num']:
+    #             self._unlinkWorstNeighbor(i)
+    #         if len(self.getNeighbors(rewiring_target)) == self.network.node[rewiring_target]['max_conn_num']:
+    #             self._unlinkWorstNeighbor(rewiring_target)
+    #
+    #         # rewire target
+    #         # update information
+    #         print('Rewire agent', rewiring_target)
+    #         if rewiring_target in self.network.node[i]['S_']:
+    #             self.network.node[i]['S_'].remove(rewiring_target)
+    #             # TO-DO
+    #             if i in self.network.node[rewiring_target]['S_']:
+    #                 self.network.node[rewiring_target]['S_'].remove(i)
+    #
+    #             self.network.add_edge(i, rewiring_target)
+    #             # reveal the reward matrix of the unknown agent and update
+    #             self._revealTheUnknownGameForEdge(i, rewiring_target)
+    #         else:
+    #             self.network.node[i]['BL'].remove(rewiring_target)
+    #             self.network.node[rewiring_target]['BL'].remove(i)
+    #         # enable the connection
+    #         self.network.edge[i][rewiring_target]['is_connected'] = 0
+    #
+    #         # TO-DO
+    #         # the rewiring pair shares the cost
+    #         self.network.node[i]['ac'] += self.rewiring_cost / 2
+    #         self.network.node[rewiring_target]['ac'] += self.rewiring_cost / 2
+    #         self.network.node[i]['rewiring_time'] += 1
+    #     else:
+    #         # do nothing
+    #         print('Target agent ', rewiring_target, ' refused the rewiring.')
+    #     return
 
     # get rewiring response from target for i
     def _getRewiringResponse(self, target, i):
@@ -122,28 +288,51 @@ class BasicEnv(object):
             return 1 if random.uniform(0,1) < 0.5 else 0
         # accept with HE
         p = self.oppActionDis[target, i]
-        game = self.network.edge[target][i]['game']
+        # game = self.network.edge[target][i]['game']
         if rewiring_strategy == 1:
             # if known agent
             if i in self.network.node[target]['BL']:
+                game = self.network.edge[target][i]['game']
                 expected_value = max(p * game[0,0] + (1 - p) * game[0,1], p * game[1,0] + (1 - p) * game[1,1])
                 return 1 if expected_value * self.rewiring_sight > self.rewiring_cost / 2 else 0
             # if unknown agent
-            if i in self.network.node[target]['S_']:
-                HE_value = self.calculateHEValue(target, i)
-                return 1 if HE_value * self.rewiring_sight > self.rewiring_cost / 2 else 0
+            # if i in self.network.node[target]['S_']:
+            HE_value = self.calculateHEValue(target, i)
+            return 1 if HE_value * self.rewiring_sight > self.rewiring_cost / 2 else 0
 
         if rewiring_strategy == 2:
             # if known agent
             if i in self.network.node[target]['BL']:
+                game = self.network.edge[target][i]['game']
                 expected_value = max(p * game[0, 0] + (1 - p) * game[0, 1], p * game[1, 0] + (1 - p) * game[1, 1])
                 return 1 if expected_value * self.rewiring_sight > self.rewiring_cost / 2 else 0
             # if unknown agent
             # TO-DO
             # check target connection numbers
-            if i in self.network.node[target]['S_']:
-                lamb_value = self.calculateLambdaValue(target, i)
-                return 1 if lamb_value * self.rewiring_sight > self.rewiring_cost / 2 else 0
+            # if i in self.network.node[target]['S_']:
+            minimum_expected_reward, sec_minimum_expected_reward = self.calculateBaselines(target)
+            lamb_value = self.calculateLambdaValue(target, i, minimum_expected_reward, sec_minimum_expected_reward)
+            return 1 if lamb_value * self.rewiring_sight > self.rewiring_cost / 2 else 0
+
+        if rewiring_strategy == 3:
+            # if known agent
+            if i in self.network.node[target]['BL']:
+                game = self.network.edge[target][i]['game']
+                expected_value = max(p * game[0, 0] + (1 - p) * game[0, 1], p * game[1, 0] + (1 - p) * game[1, 1])
+                return 1 if expected_value * self.rewiring_sight > self.rewiring_cost / 2 else 0
+            # if unknown agent
+            # TO-DO
+            # check target connection numbers
+            # if i in self.network.node[target]['S_']:
+                # minimum_expected_reward, sec_minimum_expected_reward = self.calculateBaselines(target)
+            maximum_expected_reward = self.calculateUpperBound(target)
+            lamb_value = self.calculateLambdaValueMax(target, i, maximum_expected_reward)
+            print('--op lam', lamb_value, 'max', maximum_expected_reward)
+            return 1 if lamb_value * self.rewiring_sight > self.rewiring_cost / 2 else 0
+
+        print('')
+        print('aaaa')
+        print('')
 
 
 
@@ -153,18 +342,30 @@ class BasicEnv(object):
 
         # unlink a random neighbor
         if rewiring_strategy == 0:
-            unlink_agent_index = random.randint(0, len(self.network.neighbors(i)) - 1)
-            unlink_agent_no = self.network.neighbors(i)[unlink_agent_index]
+            unlink_agent_index = random.randint(0, len(self.getNeighbors(i)) - 1)
+            unlink_agent_no = self.getNeighbors(i)[unlink_agent_index]
+            if self.network.edge[i][unlink_agent_no]['is_connected'] == 1:
+                print('Error: Target can not be unlink.')
+                return
             self.network.node[i]['BL'].append(unlink_agent_no)
-            self.network.remove_edge(i, unlink_agent_no)
+            self.network.node[unlink_agent_no]['BL'].append(i)
+            # self.network.remove_edge(i, unlink_agent_no)
+            self.network.edge[i][unlink_agent_no]['is_connected'] = 1
+            print(i, 'Unlink agent ', unlink_agent_no)
         # unlink the worst neighbor
         else:
             # 1) get the maximum(minimum) expected value in S
             self.network.node[i]['expected_value_list'] = self.calculateExpectedRewardInS(i)
             worst_agent_index = np.array(self.network.node[i]['expected_value_list']).argmin()
-            worst_agent_no = self.network.neighbors(i)[worst_agent_index]
-            self.network.node[i]['BL'].append(worst_agent_index)
-            self.network.remove_edge(i, worst_agent_index)
+            worst_agent_no = self.getNeighbors(i)[worst_agent_index]
+            if self.network.edge[i][worst_agent_no]['is_connected'] == 1:
+                print('Error: Target can not be unlink.')
+                return
+            self.network.node[i]['BL'].append(worst_agent_no)
+            self.network.node[worst_agent_no]['BL'].append(i)
+            self.network.edge[i][worst_agent_no]['is_connected'] = 1
+            # self.network.remove_edge(i, worst_agent_no)
+            print(i, 'Unlink agent ', worst_agent_no)
         return
 
     # i interacts with j, play the game G(i,j)
@@ -250,6 +451,21 @@ class BasicEnv(object):
         self.network.edge[i][j]['avg_policy_pair'] = [avg_pol_i, avg_pol_j]
         self.network.edge[i][j]['count'] = count
 
+    def calculateLambdaInS_(self, i):
+        rewiring_strategy = self.network.node[i]['rewiring_strategy']
+        index_z_list_S_ = []
+        S_ = self.network.node[i]['S_']
+        for j in S_:
+            if rewiring_strategy == 2:
+                minimum_expected_reward, sec_minimum_expected_reward = self.calculateBaselines(i)
+                index_z_list_S_.append(
+                    self.calculateLambdaValue(i, j, minimum_expected_reward, sec_minimum_expected_reward))
+            elif rewiring_strategy == 3:
+                maximum_expected_reward = self.calculateUpperBound(i)
+                index_z_list_S_.append(
+                    self.calculateLambdaValueMax(i, j, maximum_expected_reward))
+        return index_z_list_S_
+
     def calculateHEValueInS_(self, i):
         expected_value_S_ = []
         S_ = self.network.node[i]['S_']
@@ -257,6 +473,18 @@ class BasicEnv(object):
         for j in S_:
             expected_value_S_.append(self.calculateHEValue(i, j))
         return expected_value_S_
+
+    def calculateExpectedRewardInBL(self, i):
+        expectedReward_BL = []
+        BL = self.network.node[i]['BL']
+        # print(S)
+        for j in BL:
+            # evaluate opponent's possibility to choose action a(for the sight of some agent)
+            p = self.oppActionDis[i, j]
+            game = self.network.edge[i][j]['game']
+            expectedReward_BL.append(max(p * game[0, 0] + (1 - p) * game[0, 1], p * game[1, 0] + (1 - p) * game[1, 1]))
+
+        return expectedReward_BL
 
     def calculateHEValue(self, i, j):
         # print('calculate index for agent: ' + str(neighbor))
@@ -289,7 +517,24 @@ class BasicEnv(object):
 
             return max(ev1, ev2)
 
-    def calculateLambdaValue(self, i, j):
+    def calculateUpperBound(self, i):
+        self.network.node[i]['expected_value_list'] = self.calculateExpectedRewardInS(i)
+        expected_value_list = self.network.node[i]['expected_value_list']
+        maximum_expected_reward = max(expected_value_list)
+        return maximum_expected_reward
+
+    def calculateBaselines(self, i):
+        # 1) get the maximum(minimum) expected value in S
+        self.network.node[i]['expected_value_list'] = self.calculateExpectedRewardInS(i)
+        expected_value_list = self.network.node[i]['expected_value_list']
+        minimum_expected_reward = 0 if expected_value_list == [] else min(expected_value_list)
+        sec_minimum_expected_reward = 0
+        if len(self.getNeighbors(i)) > 1:
+            expected_value_list.remove(minimum_expected_reward)
+            sec_minimum_expected_reward = min(expected_value_list)
+        return minimum_expected_reward, sec_minimum_expected_reward
+
+    def calculateLambdaValue(self, i, j, minimum_expected_reward, sec_minimum_expected_reward):
         p = self.oppActionDis[i, j]
         # sort the agent_no and neighbor, small one at left
         left = min(i, j)
@@ -299,15 +544,9 @@ class BasicEnv(object):
         index_in_dis_matrix = left * self.agent_num + right
 
         # 1) get the maximum(minimum) expected value in S
-        self.network.node[i]['expected_value_list'] = self.calculateExpectedRewardInS(i)
-        expected_value_list = self.network.node[i]['expected_value_list']
-        minimum_expected_reward = min(expected_value_list)
-        sec_minimum_expected_reward = 0
-        if len(self.network.neighbors(i)) > 1:
-            expected_value_list.remove(minimum_expected_reward)
-            sec_minimum_expected_reward = min(expected_value_list)
+        # minimum_expected_reward ,sec_minimum_expected_reward = self.calculateBaselines(i, j)
 
-        if len(self.network.neighbors(i)) == self.network.node[i]['max_conn_num']:
+        if len(self.getNeighbors(i)) == self.network.node[i]['max_conn_num']:
             if self.distribution_type == 0:
                 # U(a1,b1) U(a2,b2)
                 a1 = p * self.rewardDisMatrix[index_in_dis_matrix, 0] - (1 - p) * self.rewardDisMatrix[index_in_dis_matrix, 4]
@@ -318,7 +557,7 @@ class BasicEnv(object):
 
 
 
-                if len(self.network.neighbors(i)) == 1:
+                if len(self.getNeighbors(i)) == 1:
                     z1 = (a1 + b1) / 2 - minimum_expected_reward
                     z2 = (a2 + b2) / 2 - minimum_expected_reward
                 else:
@@ -340,7 +579,7 @@ class BasicEnv(object):
                 a2 = self.rewardDisMatrix[index_in_dis_matrix, 2]
                 b2 = self.rewardDisMatrix[index_in_dis_matrix, 3]
 
-                if len(self.network.neighbors(i)) == 1:
+                if len(self.getNeighbors(i)) == 1:
                     z1 = p * a1 / (a1 + b1) - (1 - p) * self.rewardDisMatrix[index_in_dis_matrix, 4] \
                          - minimum_expected_reward
                     z2 = (1 - p) * a2 / (a2 + b2) - p * self.rewardDisMatrix[index_in_dis_matrix, 5] \
@@ -361,12 +600,150 @@ class BasicEnv(object):
             # TO-DO
             # if target has not reached the connection limitation
             # Lambda should be calculated with different equations
+            if self.distribution_type == 0:
+                # U(a1,b1) U(a2,b2)
+                a1 = p * self.rewardDisMatrix[index_in_dis_matrix, 0] - (1 - p) * self.rewardDisMatrix[
+                    index_in_dis_matrix, 4]
+                b1 = p * self.rewardDisMatrix[index_in_dis_matrix, 1] - (1 - p) * self.rewardDisMatrix[
+                    index_in_dis_matrix, 4]
+
+                a2 = (1 - p) * self.rewardDisMatrix[index_in_dis_matrix, 2] - p * self.rewardDisMatrix[
+                    index_in_dis_matrix, 5]
+                b2 = (1 - p) * self.rewardDisMatrix[index_in_dis_matrix, 3] - p * self.rewardDisMatrix[
+                    index_in_dis_matrix, 5]
+
+                z1 = ut.calculateLambdaIndexNotBreak(a1, b1, self.rewiring_sight,
+                                                 minimum_expected_reward)
+                # z2 = calculateIndex(a2, b2, c, sight)
+                z2 = ut.calculateLambdaIndexNotBreak(a2, b2, self.rewiring_sight,
+                                                 minimum_expected_reward)
+                return max(z1, z2)
+
+            if self.distribution_type == 1:
+                # beta(a,b)
+                a1 = self.rewardDisMatrix[index_in_dis_matrix, 0]
+                b1 = self.rewardDisMatrix[index_in_dis_matrix, 1]
+
+                a2 = self.rewardDisMatrix[index_in_dis_matrix, 2]
+                b2 = self.rewardDisMatrix[index_in_dis_matrix, 3]
+
+                z1 = ut.calculateLambdaIndexInBetaNotBreak(a1, b1, self.rewiring_sight,
+                                                       minimum_expected_reward,
+                                                       p)
+                # z2 = calculateIndex(a2, b2, c, sight)
+                z2 = ut.calculateLambdaIndexInBetaNotBreak(a2, b2, self.rewiring_sight,
+                                                       minimum_expected_reward,
+                                                       1 - p)
+                return max(z1, z2)
+
             return
+
+    def calculateLambdaValueMax(self, i, j, maximum_expected_reward):
+        p = self.oppActionDis[i, j]
+        # sort the agent_no and neighbor, small one at left
+        left = min(i, j)
+        right = max(i, j)
+        # print(left)
+        # print(right)
+        index_in_dis_matrix = left * self.agent_num + right
+
+        # 1) get the maximum(minimum) expected value in S
+        # minimum_expected_reward ,sec_minimum_expected_reward = self.calculateBaselines(i, j)
+
+        # if len(self.getNeighbors(i)) == self.network.node[i]['max_conn_num']:
+        # TO-DO
+        if self.distribution_type == 0:
+            # U(a1,b1) U(a2,b2)
+            a1 = p * self.rewardDisMatrix[index_in_dis_matrix, 0] - (1 - p) * self.rewardDisMatrix[
+                index_in_dis_matrix, 4]
+            b1 = p * self.rewardDisMatrix[index_in_dis_matrix, 1] - (1 - p) * self.rewardDisMatrix[
+                index_in_dis_matrix, 4]
+
+            a2 = (1 - p) * self.rewardDisMatrix[index_in_dis_matrix, 2] - p * self.rewardDisMatrix[
+                index_in_dis_matrix, 5]
+            b2 = (1 - p) * self.rewardDisMatrix[index_in_dis_matrix, 3] - p * self.rewardDisMatrix[
+                index_in_dis_matrix, 5]
+
+            if len(self.getNeighbors(i)) == 1:
+                z1 = (a1 + b1) / 2 - maximum_expected_reward
+                z2 = (a2 + b2) / 2 - maximum_expected_reward
+            else:
+                # z1 = calculateIndex(a1, b1, c, sight)
+                z1 = ut.calculateLambdaIndexMax(a1, b1, self.rewiring_sight,
+                                                maximum_expected_reward)
+                # z2 = calculateIndex(a2, b2, c, sight)
+                z2 = ut.calculateLambdaIndexMax(a2, b2, self.rewiring_sight,
+                                                maximum_expected_reward)
+            return max(z1, z2)
+
+        if self.distribution_type == 1:
+            # beta(a,b)
+            a1 = self.rewardDisMatrix[index_in_dis_matrix, 0]
+            b1 = self.rewardDisMatrix[index_in_dis_matrix, 1]
+
+            a2 = self.rewardDisMatrix[index_in_dis_matrix, 2]
+            b2 = self.rewardDisMatrix[index_in_dis_matrix, 3]
+
+            if len(self.getNeighbors(i)) == 1:
+                z1 = p * a1 / (a1 + b1) - (1 - p) * self.rewardDisMatrix[index_in_dis_matrix, 4] \
+                     - maximum_expected_reward
+                z2 = (1 - p) * a2 / (a2 + b2) - p * self.rewardDisMatrix[index_in_dis_matrix, 5] \
+                     - maximum_expected_reward
+            else:
+                # z1 = calculateIndex(a1, b1, c, sight)
+                z1 = ut.calculateLambdaIndexMaxInBeta(a1, b1, self.rewiring_sight,
+                                                      maximum_expected_reward,
+                                                      p)
+                # z2 = calculateIndex(a2, b2, c, sight)
+                z2 = ut.calculateLambdaIndexMaxInBeta(a2, b2, self.rewiring_sight,
+                                                      maximum_expected_reward,
+                                                      1 - p)
+            return max(z1, z2)
+        # else:
+        #     # TO-DO
+        #     # if target has not reached the connection limitation
+        #     # Lambda should be calculated with different equations
+        #     if self.distribution_type == 0:
+        #         # U(a1,b1) U(a2,b2)
+        #         a1 = p * self.rewardDisMatrix[index_in_dis_matrix, 0] - (1 - p) * self.rewardDisMatrix[
+        #             index_in_dis_matrix, 4]
+        #         b1 = p * self.rewardDisMatrix[index_in_dis_matrix, 1] - (1 - p) * self.rewardDisMatrix[
+        #             index_in_dis_matrix, 4]
+        #
+        #         a2 = (1 - p) * self.rewardDisMatrix[index_in_dis_matrix, 2] - p * self.rewardDisMatrix[
+        #             index_in_dis_matrix, 5]
+        #         b2 = (1 - p) * self.rewardDisMatrix[index_in_dis_matrix, 3] - p * self.rewardDisMatrix[
+        #             index_in_dis_matrix, 5]
+        #
+        #         z1 = ut.calculateLambdaIndexNotBreak(a1, b1, self.rewiring_sight,
+        #                                              minimum_expected_reward)
+        #         # z2 = calculateIndex(a2, b2, c, sight)
+        #         z2 = ut.calculateLambdaIndexNotBreak(a2, b2, self.rewiring_sight,
+        #                                              minimum_expected_reward)
+        #         return max(z1, z2)
+        #
+        #     if self.distribution_type == 1:
+        #         # beta(a,b)
+        #         a1 = self.rewardDisMatrix[index_in_dis_matrix, 0]
+        #         b1 = self.rewardDisMatrix[index_in_dis_matrix, 1]
+        #
+        #         a2 = self.rewardDisMatrix[index_in_dis_matrix, 2]
+        #         b2 = self.rewardDisMatrix[index_in_dis_matrix, 3]
+        #
+        #         z1 = ut.calculateLambdaIndexInBetaNotBreak(a1, b1, self.rewiring_sight,
+        #                                                    minimum_expected_reward,
+        #                                                    p)
+        #         # z2 = calculateIndex(a2, b2, c, sight)
+        #         z2 = ut.calculateLambdaIndexInBetaNotBreak(a2, b2, self.rewiring_sight,
+        #                                                    minimum_expected_reward,
+        #                                                    1 - p)
+        #         return max(z1, z2)
+
 
     # get the expected reward list for set S
     def calculateExpectedRewardInS(self, i):
         expectedReward_S = []
-        S = self.network.neighbors(i)
+        S = self.getNeighbors(i)
         # print(S)
         for oppo_no in S:
             # evaluate opponent's possibility to choose action a(for the sight of some agent)
@@ -411,6 +788,12 @@ class BasicEnv(object):
         p_old = self.oppActionDis[i, j]
         self.oppActionDis[i, j] = ut.updatePolcyFromFrequecy(p_old, j_action)
 
+    def getNeighbors(self, i):
+        S = []
+        for n in self.network.neighbors(i):
+            if self.network.edge[i][n]['is_connected'] == 0:
+                S.append(n)
+        return S
     # initialize the network topology;
     # return a network(graph)
     def _initialNetworkTopology(self):
@@ -422,21 +805,15 @@ class BasicEnv(object):
         elif self.network_type == 2:
             N = nx.random_graphs.barabasi_albert_graph(self.agent_num, 1)
 
-        initS__Size = self.pot_peer_num
+        # init is_connected for edges
+        for (i, j) in N.edges():
+            N.edge[i][j]['is_connected'] = 0
+
+        # init nodes
         for i in range(self.agent_num):
-            S_ = []
-            BL = []
-            # links are initial links, the set S
-            S = N.neighbors(i)
-            # randomly add potential peers, the set S'
-            for j in range(initS__Size):
-                pot_peer_index = random.randint(0, self.agent_num - 1)
-                while pot_peer_index == i or pot_peer_index in S:
-                    pot_peer_index = random.randint(0, self.agent_num - 1)
-                S_.append(pot_peer_index)
-            N.node[i]['S_'] = S_
+            N.node[i]['S_'] = []
             # initial the BL for black-list
-            N.node[i]['BL'] = BL
+            N.node[i]['BL'] = []
             # initial the accumulate reward and cost for agent(node)
             N.node[i]['ar'] = 0
             N.node[i]['ac'] = 0
@@ -444,12 +821,13 @@ class BasicEnv(object):
             N.node[i]['expected_value_list'] = []
             N.node[i]['index_z_value_list'] = []
             N.node[i]['expected_value_list_S_'] = []
+            N.node[i]['expected_value_list_BL'] = []
 
             N.node[i]['rebuild_mark'] = 0
             N.node[i]['rewiring_time'] = 0
 
             # additionally random initialize the strategy of agents, 10% random, 10% Never, 30% HE, and 50 % Optimal
-            N.node[i]['rewiring_strategy'] = 0
+            N.node[i]['rewiring_strategy'] = self.rewiring_strategy
             # ran = random.uniform(0, 1)
             # if ran < 0.33:
             #     N.node[i]['rewiring_strategy'] = 0
@@ -459,7 +837,7 @@ class BasicEnv(object):
             #     N.node[i]['rewiring_strategy'] = 2
 
             # 0 for BR, 1 for WoLF, 2 for JAL
-            N.node[i]['gaming_strategy'] = 2
+            N.node[i]['gaming_strategy'] = 0
             # init game_strategy
             # ran = random.uniform(0, 1)
             # if ran <= 1 / 3:
@@ -467,7 +845,37 @@ class BasicEnv(object):
             # elif ran <= 2 / 3:
             #     N.node[i]['gaming_strategy'] = 2
 
+            N.node[i]['max_conn_num'] = self.init_conn_num
+
         return N
+
+    def _initPotentialPeers(self):
+        # adjust neighbors and potential peers
+        for i in range(self.agent_num):
+            # links are initial links, the set S
+            S = self.getNeighbors(i)
+            # print(i, ':', S)
+            for j in range(self.pot_peer_num):
+                pot_peer_no = random.randint(0, self.agent_num - 1)
+                while pot_peer_no == i or pot_peer_no in S:
+                    pot_peer_no = random.randint(0, self.agent_num - 1)
+
+                self.network.node[i]['S_'].append(pot_peer_no)
+            # complex version
+            # TO-DO
+            # tmp_size = len(S) - self.init_conn_num
+            # for j in range(tmp_size):
+            #     pot_peer = np.random.choice(S)
+            #     while len(self.getNeighbors(pot_peer)) == self.init_conn_num:
+            #         pot_peer = np.random.choice(S)
+            #     S.remove(pot_peer)
+            #     print('unlink',pot_peer)
+            #     self.network.edge[i][pot_peer]['is_connected'] = 1
+            #     pot_peer_index = random.randint(0, self.agent_num - 1)
+            #     while pot_peer_index == i or pot_peer_index in S:
+            #         pot_peer_index = random.randint(0, self.agent_num - 1)
+            #     self.network.node[i]['S_'].append(pot_peer)
+            #     self.network.node[pot_peer]['S_'].append(i)
 
     # initialize the reward distribution for each agent pair( k*(k-1)/2 ).
     # return a numpy matrix
@@ -491,7 +899,8 @@ class BasicEnv(object):
         edges = self.network.edges()
         for (i, j) in edges:
             # as i always < j, so directly
-            self._revealTheUnknownGameForEdge(i, j)
+            if self.network.edge[i][j]['is_connected'] == 0:
+                self._revealTheUnknownGameForEdge(i, j)
 
 
     # reveal the unknown game by giving agent pair (i,j) (edge)
@@ -528,6 +937,8 @@ class BasicEnv(object):
 
         self.network.edge[i][j]['delta_w'] = 0.0001
         self.network.edge[i][j]['delta_l'] = 0.0002
+
+        # self.network.edge[i][j]['is_connected'] = 0
         # TO-DO params
 
     # initialize the opponents action distribution for every agent pair
@@ -549,7 +960,9 @@ class BasicEnv(object):
 
         for agent in self.network.nodes():
             print('Agent: ' + str(agent))
-            print('  Neighbors: ' + str(self.network.neighbors(agent)))
+            print('  Neighbors: ' + str(self.getNeighbors(agent)))
+            print('  Potential peers: ' + str(self.network.node[agent]['S_']))
+            print('  Unlinked Neighbors: ' + str(self.network.node[agent]['BL']))
             print('  Rewiring time: ' + str(self.network.node[agent]['rewiring_time']))
             print('  AR: ' + str(self.network.node[agent]['ar']))
             print('  AC: ' + str(self.network.node[agent]['ac']))
