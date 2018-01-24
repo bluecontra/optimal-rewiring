@@ -4,7 +4,7 @@ import numpy as np
 import utils as ut
 
 
-class BasicEnv(object):
+class MixEnv(object):
     def __init__(self, agent_num, network_type,
                  init_conn_num,
                  neighborhood_size,
@@ -890,13 +890,17 @@ class BasicEnv(object):
 
             # additionally random initialize the strategy of agents, 10% random, 10% Never, 30% HE, and 50 % Optimal
             N.node[i]['rewiring_strategy'] = self.rewiring_strategy
-            # ran = random.uniform(0, 1)
-            # if ran < 0.33:
-            #     N.node[i]['rewiring_strategy'] = 0
-            # elif ran < 0.66:
-            #     N.node[i]['rewiring_strategy'] = 1
-            # else:
-            #     N.node[i]['rewiring_strategy'] = 2
+            ran = random.uniform(0, 1)
+            if ran <= 0.2:
+                N.node[i]['rewiring_strategy'] = 0
+            elif ran <= 0.4:
+                N.node[i]['rewiring_strategy'] = 1
+            elif ran <= 0.6:
+                N.node[i]['rewiring_strategy'] = 2
+            elif ran <= 0.8:
+                N.node[i]['rewiring_strategy'] = 3
+            else:
+                N.node[i]['rewiring_strategy'] = 4
 
             # 0 for BR, 1 for WoLF, 2 for JAL
             N.node[i]['gaming_strategy'] = 0
@@ -908,6 +912,13 @@ class BasicEnv(object):
             #     N.node[i]['gaming_strategy'] = 2
 
             N.node[i]['max_conn_num'] = self.init_conn_num
+
+        # addition
+        N.node[0]['rewiring_strategy'] = 0
+        N.node[1]['rewiring_strategy'] = 1
+        N.node[2]['rewiring_strategy'] = 2
+        N.node[3]['rewiring_strategy'] = 3
+        N.node[4]['rewiring_strategy'] = 4
 
         return N
 
@@ -1042,3 +1053,24 @@ class BasicEnv(object):
             print('Group lowest reward: ' + str(min(group_reward)))
 
         return group_reward, group_rewiring
+
+    def printAgentInfoEveryStg(self):
+        s0 = []
+        s1 = []
+        s2 = []
+        s3 = []
+        s4 = []
+
+        for agent in self.network.nodes():
+            if self.network.node[agent]['rewiring_strategy'] == 0:
+                s0.append(self.network.node[agent]['ar'] - self.network.node[agent]['ac'])
+            if self.network.node[agent]['rewiring_strategy'] == 1:
+                s1.append(self.network.node[agent]['ar'] - self.network.node[agent]['ac'])
+            if self.network.node[agent]['rewiring_strategy'] == 2:
+                s2.append(self.network.node[agent]['ar'] - self.network.node[agent]['ac'])
+            if self.network.node[agent]['rewiring_strategy'] == 3:
+                s3.append(self.network.node[agent]['ar'] - self.network.node[agent]['ac'])
+            if self.network.node[agent]['rewiring_strategy'] == 4:
+                s4.append(self.network.node[agent]['ar'] - self.network.node[agent]['ac'])
+
+        return s0, s1, s2, s3, s4

@@ -7,27 +7,30 @@ AGENT_NUM = 100
 BANDWIDTH = 4
 NEIGHBORHOOD_SIZE = 12
 
-REWIRING_COST = 40
+REWIRING_COST = 0
 REWIRING_PROBABILITY = 0.01
 
-K = 4
+K = 2
 
-REWIRING_STRATEGY = 2
+REWIRING_STRATEGY = 4
 
 NETWORK_TYPE = 0
 DISTRIBUTION_TYPE = 0
 
-EPISODE = 10
+EPISODE = 5
 
 average_reward = []
 highest_reward = []
 lowest_reward = []
 average_rewiring = 0.0
 
+DEBUG = 0
+
 if __name__ == '__main__':
 
     for repeat in range(EPISODE):
-        print('Episode: ' + str(repeat))
+        if DEBUG > -1:
+            print('Episode: ' + str(repeat))
 
         # init Env
         env = Env.BasicEnv(AGENT_NUM,
@@ -43,7 +46,8 @@ if __name__ == '__main__':
         phi = env.phi
 
         for iteration in range(INTERACTION_ROUND):
-            print('-- Interaction round: ', iteration)
+            if DEBUG > 0:
+                print('-- Interaction round: ', iteration)
             # to avoid the the problem that decision order may influence the fairness
             # shuffle the order at every iteration
             agents = env.network.nodes()
@@ -63,12 +67,25 @@ if __name__ == '__main__':
                     if neighbors_num > 0:
                         if len(agent['S_'] + agent['BL']) > 0:
                             # do rewire
-                            print('Agent ' + str(i) + ' does rewiring.')
+                            if DEBUG > 0:
+                                print('Agent ' + str(i) + ' does rewiring.')
                             env._rewire(i)
                         else:
-                            print('No more available potential peers.')
+                            if DEBUG > 0:
+                                print('No more available potential peers.')
                     else:
-                        print('Agent ' + str(i) + ' is isolated.')
+                        if DEBUG > 0:
+                            print('Agent ' + str(i) + ' is isolated.')
+                        # TO-DO
+                        if len(agent['S_'] + agent['BL']) > 0:
+                            # do rewire
+                            if DEBUG > 0:
+                                print('Agent ' + str(i) + ' does rewiring.')
+                            env._rewire(i)
+                        else:
+                            if DEBUG > 0:
+                                print(i, 'has no more available potential peers.')
+
             # TO-DO
             # more reasonable situation, but complex
             # 1) raise rewiring proposals.
@@ -92,10 +109,11 @@ if __name__ == '__main__':
                     env._interact(left, right)
                     # env._interact(i, oppo_agent_no)
                 else:
-                    print('agent ', i, ' has no neighbor.')
+                    if DEBUG > 0:
+                        print('agent ', i, ' has no neighbor.')
 
                     # statistic
-        group_reward, group_rewiring = env.printAgentInfo()
+        group_reward, group_rewiring = env.printAgentInfo(1)
         average_reward.append(sum(group_reward) / AGENT_NUM)
         highest_reward.append(max(group_reward))
         lowest_reward.append(min(group_reward))

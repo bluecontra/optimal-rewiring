@@ -47,6 +47,20 @@ def calculateLambdaIndexMax(a, b, sight, y):
         lam = (y*(y - a) + (b*b - y*y)/2) / (b-a)
     return lam
 
+# new
+# calculate lambda against max value instead of baseline
+def calculateLambdaIndexOrigin(a, b, y):
+    lam = 0
+
+    if y >= b:
+        lam = 0
+        # print('y > b')
+    if y <= a:
+        lam = (a + b) / 2 - y
+    if y > a and y < b:
+        lam = (y*(y - a) + (b*b - y*y)/2) / (b-a)
+    return lam
+
 # calculate lambda against max value instead of baseline
 # in Beta distribution
 def calculateLambdaIndexMaxInBeta(a, b, sight, y, p):
