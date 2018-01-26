@@ -4,7 +4,7 @@ import numpy as np
 import utils as ut
 
 
-class MixEnv(object):
+class LearningEnv(object):
     def __init__(self, agent_num, network_type,
                  init_conn_num,
                  neighborhood_size,
@@ -12,6 +12,7 @@ class MixEnv(object):
                  rewiring_probability,
                  distribution_type,
                  rewiring_strategy,
+                 learning_strategy,
                  K):
         self.foo = 0
 
@@ -25,6 +26,7 @@ class MixEnv(object):
         self.distribution_type = distribution_type
         self.rewiring_sight = K / self.phi
         self.rewiring_strategy = rewiring_strategy
+        self.learning_strategy = learning_strategy
         self.reward = None
 
         # initial the network and unknown reward distribution
@@ -194,7 +196,6 @@ class MixEnv(object):
             rewiring_target = self.network.node[i]['BL'][ev_max_index]
 
         # check if the rewiring target accept the proposal
-        cohere = self.network.node[i]['max_conn_num'] - len(self.getNeighbors(i)) + 1
         if ev_m * self.rewiring_sight > self.rewiring_cost:
             if self._getRewiringResponse(rewiring_target, i) == 1:
                 # do rewiring
@@ -444,7 +445,7 @@ class MixEnv(object):
         delta_w = self.network.edge[i][j]['delta_w']
         delta_l = self.network.edge[i][j]['delta_l']
 
-        epsilon = epsilon - int(count / 1000) * 0.1
+        epsilon = max(epsilon - int(count / 1000) * 0.1, 0.0)
 
         # p1, p2's Q-table
         q_i = q_table_pair[0]
@@ -835,14 +836,15 @@ class MixEnv(object):
         return q
 
     def _updateAvgPolicy(self, avg_pol, pol, count):
-        return avg_pol + 1 / count * (pol - avg_pol)
+        # return avg_pol + 1 / count * (pol - avg_pol)
+        return avg_pol * 99 / 100 + pol / 100
 
     def _updatePolicy(self, q, op_pol, pol, avg_pol, delta_w, delta_l):
         q_a = (op_pol * q[0, 0] + (1 - op_pol) * q[0, 1])
         q_b = (op_pol * q[0, 2] + (1 - op_pol) * q[0, 3])
         expect_value_current = pol * q_a + (1 - pol) * q_b
         expect_value_avg = avg_pol * q_a + (1 - avg_pol) * q_b
-        delta = delta_w if expect_value_current > expect_value_avg else delta_l
+        delta = delta_w if expect_value_current >= expect_value_avg else delta_l
 
         return min(pol + delta, 1.0) if q_a >= q_b else max(pol - delta, 0.0)
 
@@ -890,39 +892,18 @@ class MixEnv(object):
 
             # additionally random initialize the strategy of agents, 10% random, 10% Never, 30% HE, and 50 % Optimal
             N.node[i]['rewiring_strategy'] = self.rewiring_strategy
-            ran = random.uniform(0, 1)
-            if ran <= 0.33:
-                N.node[i]['rewiring_strategy'] = 0
-            elif ran <= 0.66:
-                N.node[i]['rewiring_strategy'] = 1
-            # elif ran <= 0.6:
-            #     N.node[i]['rewiring_strategy'] = 2
-            # elif ran <= 0.8:
-            #     N.node[i]['rewiring_strategy'] = 3
-            else:
-                N.node[i]['rewiring_strategy'] = 4
-            # if ran <= self.rewiring_strategy:
+            # ran = random.uniform(0, 1)
+            # if ran < 0.33:
+            #     N.node[i]['rewiring_strategy'] = 0
+            # elif ran < 0.66:
             #     N.node[i]['rewiring_strategy'] = 1
             # else:
-            #     N.node[i]['rewiring_strategy'] = 4
+            #     N.node[i]['rewiring_strategy'] = 2
 
             # 0 for BR, 1 for WoLF, 2 for JAL
-            N.node[i]['gaming_strategy'] = 0
-            # init game_strategy
-            # ran = random.uniform(0, 1)
-            # if ran <= 1 / 3:
-            #     N.node[i]['gaming_strategy'] = 1
-            # elif ran <= 2 / 3:
-            #     N.node[i]['gaming_strategy'] = 2
+            N.node[i]['gaming_strategy'] = self.learning_strategy
 
             N.node[i]['max_conn_num'] = self.init_conn_num
-
-        # addition
-        # N.node[0]['rewiring_strategy'] = 0
-        # N.node[1]['rewiring_strategy'] = 1
-        # N.node[2]['rewiring_strategy'] = 2
-        # N.node[3]['rewiring_strategy'] = 3
-        # N.node[4]['rewiring_strategy'] = 4
 
         return N
 
@@ -999,10 +980,10 @@ class MixEnv(object):
         gameMatrix = np.array([[a, al], [al2, b]])
         gameMatrix = np.matrix(gameMatrix)
         self.network.edge[i][j]['game'] = gameMatrix
-        self.network.edge[i][j]['alpha'] = [al, al2]
+        self.network.edge[i][j]['alpha_value'] = [al, al2]
 
         self.network.edge[i][j]['policy_pair'] = [0.5, 0.5]
-        self.network.edge[i][j]['avg_policy_pair'] = [0.5, 0.5]
+        self.network.edge[i][j]['avg_policy_pair'] = [0.0, 0.0]
 
         # q_table_pair = np.array([[0.0,0.0], [0.0,0.0]])
         q_table_pair = np.array([[0.0, 0.0, 0.0, 0.0], [0.0, 0.0, 0.0, 0.0]])
@@ -1057,24 +1038,3 @@ class MixEnv(object):
             print('Group lowest reward: ' + str(min(group_reward)))
 
         return group_reward, group_rewiring
-
-    def printAgentInfoEveryStg(self):
-        s0 = []
-        s1 = []
-        s2 = []
-        s3 = []
-        s4 = []
-
-        for agent in self.network.nodes():
-            if self.network.node[agent]['rewiring_strategy'] == 0:
-                s0.append(self.network.node[agent]['ar'] - self.network.node[agent]['ac'])
-            if self.network.node[agent]['rewiring_strategy'] == 1:
-                s1.append(self.network.node[agent]['ar'] - self.network.node[agent]['ac'])
-            if self.network.node[agent]['rewiring_strategy'] == 2:
-                s2.append(self.network.node[agent]['ar'] - self.network.node[agent]['ac'])
-            if self.network.node[agent]['rewiring_strategy'] == 3:
-                s3.append(self.network.node[agent]['ar'] - self.network.node[agent]['ac'])
-            if self.network.node[agent]['rewiring_strategy'] == 4:
-                s4.append(self.network.node[agent]['ar'] - self.network.node[agent]['ac'])
-
-        return s0, s1, s2, s3, s4

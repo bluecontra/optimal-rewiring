@@ -4,7 +4,7 @@ import numpy as np
 import utils as ut
 
 
-class MixEnv(object):
+class NewEnv(object):
     def __init__(self, agent_num, network_type,
                  init_conn_num,
                  neighborhood_size,
@@ -45,7 +45,7 @@ class MixEnv(object):
             self._randomRewire(i)
         elif rewiring_strategy == 1:
             self._HERewire(i)
-        elif rewiring_strategy == 2 or rewiring_strategy == 3 or rewiring_strategy == 4:
+        elif rewiring_strategy == 2 or rewiring_strategy == 3 or rewiring_strategy == 4 or rewiring_strategy == 5:
             self._OptimalRewire(i)
         else:
             return
@@ -115,16 +115,17 @@ class MixEnv(object):
             else max(self.network.node[i]['expected_value_list_S_'])
         max_v_BL = 0 if self.network.node[i]['expected_value_list_BL'] == [] \
             else max(self.network.node[i]['expected_value_list_BL'])
-        if max_v_S_ > max_v_BL:
-            ev_m = max_v_S_
+        if max_v_S_> max_v_BL:
+            ev_m = max_v_S_ - minimum_expected_reward
+            # ev_m = max_v_S_
             ev_max_index = np.array(self.network.node[i]['expected_value_list_S_']).argmax()
             rewiring_target = self.network.node[i]['S_'][ev_max_index]
         else:
-            ev_m = max_v_BL
+            ev_m = max_v_BL - minimum_expected_reward
+            # ev_m = max_v_BL
             ev_max_index = np.array(self.network.node[i]['expected_value_list_BL']).argmax()
             rewiring_target = self.network.node[i]['BL'][ev_max_index]
 
-        cohere = self.network.node[i]['max_conn_num'] - len(self.getNeighbors(i)) + 1
         # check if the rewiring target accept the proposal
         if ev_m * self.rewiring_sight > self.rewiring_cost and self._getRewiringResponse(rewiring_target, i) == 1:
             # do rewiring
@@ -175,7 +176,13 @@ class MixEnv(object):
 
         maximum_expected_reward = self.calculateUpperBound(i)
         minimum_expected_reward, sec_minimum_expected_reward = self.calculateBaselines(i)
-        compare_value = minimum_expected_reward if rewiring_strategy == 2 else maximum_expected_reward
+        if rewiring_strategy == 2:
+            compare_value = minimum_expected_reward
+        elif rewiring_strategy == 3 or rewiring_strategy == 4:
+            compare_value = maximum_expected_reward
+        else:
+            # compare_value = self.calculateMean(i)
+            compare_value = minimum_expected_reward
 
         max_v_S_ = -1 if self.network.node[i]['index_z_value_list'] == [] \
             else max(self.network.node[i]['index_z_value_list'])
@@ -311,6 +318,7 @@ class MixEnv(object):
         # accept at random
         if rewiring_strategy == 0:
             return 1 if random.uniform(0,1) < 0.5 else 0
+            # return 1
         # accept with HE
         p = self.oppActionDis[target, i]
         # game = self.network.edge[target][i]['game']
@@ -320,13 +328,14 @@ class MixEnv(object):
                 game = self.network.edge[target][i]['game']
                 expected_value = max(p * game[0,0] + (1 - p) * game[0,1], p * game[1,0] + (1 - p) * game[1,1])
                 # return 1 if expected_value * self.rewiring_sight + self.rewiring_cost > 0 else 0
-                return 1 if expected_value * self.rewiring_sight > 0 else 0
-                # return 1 if (expected_value - minimum_expected_reward) * self.rewiring_sight > 0 else 0
+                # return 1 if expected_value * self.rewiring_sight > 0 else 0
+                return 1 if (expected_value - minimum_expected_reward) * self.rewiring_sight > 0 else 0
                 # return 1 if expected_value * self.rewiring_sight > self.rewiring_cost / 2 else 0
             # if unknown agent
             # if i in self.network.node[target]['S_']:
             HE_value = self.calculateHEValue(target, i)
             # return 1 if HE_value * self.rewiring_sight + self.rewiring_cost > 0 else 0
+            # return 1 if (HE_value - minimum_expected_reward) * self.rewiring_sight > 0 else 0
             return 1 if HE_value * self.rewiring_sight > 0 else 0
             # return 1 if HE_value * self.rewiring_sight > self.rewiring_cost / 2 else 0
 
@@ -382,6 +391,26 @@ class MixEnv(object):
             # if i in self.network.node[target]['S_']:
                 # minimum_expected_reward, sec_minimum_expected_reward = self.calculateBaselines(target)
             lamb_value = self.calculateLambdaValueMax(target, i, minimum_expected_reward)
+            # print('--op lam', lamb_value, 'max', maximum_expected_reward)
+            # return 1 if lamb_value * self.rewiring_sight + self.rewiring_cost > 0 else 0
+            return 1 if lamb_value * self.rewiring_sight > 0 else 0
+            # return 1 if lamb_value * self.rewiring_sight > self.rewiring_cost / 2 else 0
+
+        if rewiring_strategy == 5:
+            # if known agent
+            if i in self.network.node[target]['BL']:
+                game = self.network.edge[target][i]['game']
+                expected_value = max(p * game[0, 0] + (1 - p) * game[0, 1], p * game[1, 0] + (1 - p) * game[1, 1])
+                # return 1 if expected_value * self.rewiring_sight + self.rewiring_cost > 0 else 0
+                return 1 if (expected_value - minimum_expected_reward) * self.rewiring_sight > 0 else 0
+                # return 1 if expected_value * self.rewiring_sight > self.rewiring_cost / 2 else 0
+            # if unknown agent
+            # TO-DO
+            # check target connection numbers
+            # if i in self.network.node[target]['S_']:
+                # minimum_expected_reward, sec_minimum_expected_reward = self.calculateBaselines(target)
+            mean_expected_reward = self.calculateMean(target)
+            lamb_value = self.calculateLambdaValueMean(target, i, minimum_expected_reward, mean_expected_reward)
             # print('--op lam', lamb_value, 'max', maximum_expected_reward)
             # return 1 if lamb_value * self.rewiring_sight + self.rewiring_cost > 0 else 0
             return 1 if lamb_value * self.rewiring_sight > 0 else 0
@@ -526,6 +555,11 @@ class MixEnv(object):
                 minimum_expected_reward, sec_minimum_expected_reward = self.calculateBaselines(i)
                 index_z_list_S_.append(
                     self.calculateLambdaValueMax(i, j, minimum_expected_reward))
+            elif rewiring_strategy == 5:
+                minimum_expected_reward, sec_minimum_expected_reward = self.calculateBaselines(i)
+                mean_expected_reward = self.calculateMean(i)
+                index_z_list_S_.append(
+                    self.calculateLambdaValueMean(i, j, minimum_expected_reward, mean_expected_reward))
         return index_z_list_S_
 
     def calculateHEValueInS_(self, i):
@@ -584,6 +618,12 @@ class MixEnv(object):
         expected_value_list = self.network.node[i]['expected_value_list']
         maximum_expected_reward = 0 if expected_value_list == [] else max(expected_value_list)
         return maximum_expected_reward
+
+    def calculateMean(self, i):
+        self.network.node[i]['expected_value_list'] = self.calculateExpectedRewardInS(i)
+        expected_value_list = self.network.node[i]['expected_value_list']
+        mean_expected_reward = 0 if expected_value_list == [] else sum(expected_value_list) / len(expected_value_list)
+        return mean_expected_reward
 
     def calculateBaselines(self, i):
         # 1) get the maximum(minimum) expected value in S
@@ -710,97 +750,164 @@ class MixEnv(object):
         index_in_dis_matrix = left * self.agent_num + right
 
         # 1) get the maximum(minimum) expected value in S
-        # minimum_expected_reward ,sec_minimum_expected_reward = self.calculateBaselines(i, j)
+        # minimum_expected_reward ,sec_minimum_expected_reward = self.calculateBaselines(i)
 
-        # if len(self.getNeighbors(i)) == self.network.node[i]['max_conn_num']:
+        if len(self.getNeighbors(i)) == self.network.node[i]['max_conn_num']:
         # TO-DO
-        if self.distribution_type == 0:
-            # U(a1,b1) U(a2,b2)
-            a1 = p * self.rewardDisMatrix[index_in_dis_matrix, 0] - (1 - p) * self.rewardDisMatrix[
-                index_in_dis_matrix, 4]
-            b1 = p * self.rewardDisMatrix[index_in_dis_matrix, 1] - (1 - p) * self.rewardDisMatrix[
-                index_in_dis_matrix, 4]
+            if self.distribution_type == 0:
+                # U(a1,b1) U(a2,b2)
+                a1 = p * self.rewardDisMatrix[index_in_dis_matrix, 0] - (1 - p) * self.rewardDisMatrix[
+                    index_in_dis_matrix, 4]
+                b1 = p * self.rewardDisMatrix[index_in_dis_matrix, 1] - (1 - p) * self.rewardDisMatrix[
+                    index_in_dis_matrix, 4]
 
-            a2 = (1 - p) * self.rewardDisMatrix[index_in_dis_matrix, 2] - p * self.rewardDisMatrix[
-                index_in_dis_matrix, 5]
-            b2 = (1 - p) * self.rewardDisMatrix[index_in_dis_matrix, 3] - p * self.rewardDisMatrix[
-                index_in_dis_matrix, 5]
+                a2 = (1 - p) * self.rewardDisMatrix[index_in_dis_matrix, 2] - p * self.rewardDisMatrix[
+                    index_in_dis_matrix, 5]
+                b2 = (1 - p) * self.rewardDisMatrix[index_in_dis_matrix, 3] - p * self.rewardDisMatrix[
+                    index_in_dis_matrix, 5]
 
-            if len(self.getNeighbors(i)) == 1:
-                z1 = (a1 + b1) / 2 - maximum_expected_reward
-                z2 = (a2 + b2) / 2 - maximum_expected_reward
-            else:
-                # z1 = calculateIndex(a1, b1, c, sight)
-                z1 = ut.calculateLambdaIndexMax(a1, b1, self.rewiring_sight,
-                                                maximum_expected_reward)
+                if len(self.getNeighbors(i)) == 1:
+                    z1 = (a1 + b1) / 2 - maximum_expected_reward
+                    z2 = (a2 + b2) / 2 - maximum_expected_reward
+                else:
+                    # z1 = calculateIndex(a1, b1, c, sight)
+                    z1 = ut.calculateLambdaIndexMax(a1, b1, self.rewiring_sight,
+                                                    maximum_expected_reward)
+                    # z2 = calculateIndex(a2, b2, c, sight)
+                    z2 = ut.calculateLambdaIndexMax(a2, b2, self.rewiring_sight,
+                                                    maximum_expected_reward)
+                return max(z1, z2)
+
+            if self.distribution_type == 1:
+                # beta(a,b)
+                a1 = self.rewardDisMatrix[index_in_dis_matrix, 0]
+                b1 = self.rewardDisMatrix[index_in_dis_matrix, 1]
+
+                a2 = self.rewardDisMatrix[index_in_dis_matrix, 2]
+                b2 = self.rewardDisMatrix[index_in_dis_matrix, 3]
+
+                if len(self.getNeighbors(i)) == 1:
+                    z1 = p * a1 / (a1 + b1) - (1 - p) * self.rewardDisMatrix[index_in_dis_matrix, 4] \
+                         - maximum_expected_reward
+                    z2 = (1 - p) * a2 / (a2 + b2) - p * self.rewardDisMatrix[index_in_dis_matrix, 5] \
+                         - maximum_expected_reward
+                else:
+                    # z1 = calculateIndex(a1, b1, c, sight)
+                    z1 = ut.calculateLambdaIndexMaxInBeta(a1, b1, self.rewiring_sight,
+                                                          maximum_expected_reward,
+                                                          p)
+                    # z2 = calculateIndex(a2, b2, c, sight)
+                    z2 = ut.calculateLambdaIndexMaxInBeta(a2, b2, self.rewiring_sight,
+                                                          maximum_expected_reward,
+                                                          1 - p)
+                return max(z1, z2)
+        else:
+            # TO-DO
+            # if target has not reached the connection limitation
+            # Lambda should be calculated with different equations
+            if self.distribution_type == 0:
+                # U(a1,b1) U(a2,b2)
+                a1 = p * self.rewardDisMatrix[index_in_dis_matrix, 0] - (1 - p) * self.rewardDisMatrix[
+                    index_in_dis_matrix, 4]
+                b1 = p * self.rewardDisMatrix[index_in_dis_matrix, 1] - (1 - p) * self.rewardDisMatrix[
+                    index_in_dis_matrix, 4]
+
+                a2 = (1 - p) * self.rewardDisMatrix[index_in_dis_matrix, 2] - p * self.rewardDisMatrix[
+                    index_in_dis_matrix, 5]
+                b2 = (1 - p) * self.rewardDisMatrix[index_in_dis_matrix, 3] - p * self.rewardDisMatrix[
+                    index_in_dis_matrix, 5]
+
+                z1 = ut.calculateLambdaIndexMaxNotBreak(a1, b1, self.rewiring_sight,
+                                                        maximum_expected_reward)
                 # z2 = calculateIndex(a2, b2, c, sight)
-                z2 = ut.calculateLambdaIndexMax(a2, b2, self.rewiring_sight,
-                                                maximum_expected_reward)
-            return max(z1, z2)
+                z2 = ut.calculateLambdaIndexMaxNotBreak(a2, b2, self.rewiring_sight,
+                                                        maximum_expected_reward)
+                return max(z1, z2)
 
-        if self.distribution_type == 1:
-            # beta(a,b)
-            a1 = self.rewardDisMatrix[index_in_dis_matrix, 0]
-            b1 = self.rewardDisMatrix[index_in_dis_matrix, 1]
+            if self.distribution_type == 1:
+                # beta(a,b)
+                a1 = self.rewardDisMatrix[index_in_dis_matrix, 0]
+                b1 = self.rewardDisMatrix[index_in_dis_matrix, 1]
 
-            a2 = self.rewardDisMatrix[index_in_dis_matrix, 2]
-            b2 = self.rewardDisMatrix[index_in_dis_matrix, 3]
+                a2 = self.rewardDisMatrix[index_in_dis_matrix, 2]
+                b2 = self.rewardDisMatrix[index_in_dis_matrix, 3]
 
-            if len(self.getNeighbors(i)) == 1:
-                z1 = p * a1 / (a1 + b1) - (1 - p) * self.rewardDisMatrix[index_in_dis_matrix, 4] \
-                     - maximum_expected_reward
-                z2 = (1 - p) * a2 / (a2 + b2) - p * self.rewardDisMatrix[index_in_dis_matrix, 5] \
-                     - maximum_expected_reward
-            else:
-                # z1 = calculateIndex(a1, b1, c, sight)
-                z1 = ut.calculateLambdaIndexMaxInBeta(a1, b1, self.rewiring_sight,
-                                                      maximum_expected_reward,
-                                                      p)
+                z1 = ut.calculateLambdaIndexInBetaNotBreak(a1, b1, self.rewiring_sight,
+                                                           maximum_expected_reward,
+                                                           p)
                 # z2 = calculateIndex(a2, b2, c, sight)
-                z2 = ut.calculateLambdaIndexMaxInBeta(a2, b2, self.rewiring_sight,
-                                                      maximum_expected_reward,
-                                                      1 - p)
-            return max(z1, z2)
-        # else:
-        #     # TO-DO
-        #     # if target has not reached the connection limitation
-        #     # Lambda should be calculated with different equations
-        #     if self.distribution_type == 0:
-        #         # U(a1,b1) U(a2,b2)
-        #         a1 = p * self.rewardDisMatrix[index_in_dis_matrix, 0] - (1 - p) * self.rewardDisMatrix[
-        #             index_in_dis_matrix, 4]
-        #         b1 = p * self.rewardDisMatrix[index_in_dis_matrix, 1] - (1 - p) * self.rewardDisMatrix[
-        #             index_in_dis_matrix, 4]
-        #
-        #         a2 = (1 - p) * self.rewardDisMatrix[index_in_dis_matrix, 2] - p * self.rewardDisMatrix[
-        #             index_in_dis_matrix, 5]
-        #         b2 = (1 - p) * self.rewardDisMatrix[index_in_dis_matrix, 3] - p * self.rewardDisMatrix[
-        #             index_in_dis_matrix, 5]
-        #
-        #         z1 = ut.calculateLambdaIndexNotBreak(a1, b1, self.rewiring_sight,
-        #                                              minimum_expected_reward)
-        #         # z2 = calculateIndex(a2, b2, c, sight)
-        #         z2 = ut.calculateLambdaIndexNotBreak(a2, b2, self.rewiring_sight,
-        #                                              minimum_expected_reward)
-        #         return max(z1, z2)
-        #
-        #     if self.distribution_type == 1:
-        #         # beta(a,b)
-        #         a1 = self.rewardDisMatrix[index_in_dis_matrix, 0]
-        #         b1 = self.rewardDisMatrix[index_in_dis_matrix, 1]
-        #
-        #         a2 = self.rewardDisMatrix[index_in_dis_matrix, 2]
-        #         b2 = self.rewardDisMatrix[index_in_dis_matrix, 3]
-        #
-        #         z1 = ut.calculateLambdaIndexInBetaNotBreak(a1, b1, self.rewiring_sight,
-        #                                                    minimum_expected_reward,
-        #                                                    p)
-        #         # z2 = calculateIndex(a2, b2, c, sight)
-        #         z2 = ut.calculateLambdaIndexInBetaNotBreak(a2, b2, self.rewiring_sight,
-        #                                                    minimum_expected_reward,
-        #                                                    1 - p)
-        #         return max(z1, z2)
+                z2 = ut.calculateLambdaIndexInBetaNotBreak(a2, b2, self.rewiring_sight,
+                                                           maximum_expected_reward,
+                                                           1 - p)
+                return max(z1, z2)
 
+    def calculateLambdaValueMean(self, i, j, minimum_expected_reward, mean_expected_value):
+        p = self.oppActionDis[i, j]
+        # sort the agent_no and neighbor, small one at left
+        left = min(i, j)
+        right = max(i, j)
+        # print(left)
+        # print(right)
+        index_in_dis_matrix = left * self.agent_num + right
+
+        # 1) get the maximum(minimum) expected value in S
+        # minimum_expected_reward ,sec_minimum_expected_reward = self.calculateBaselines(i)
+
+        if len(self.getNeighbors(i)) == self.network.node[i]['max_conn_num']:
+            # TO-DO
+            if self.distribution_type == 0:
+                # U(a1,b1) U(a2,b2)
+                a1 = p * self.rewardDisMatrix[index_in_dis_matrix, 0]
+                b1 = p * self.rewardDisMatrix[index_in_dis_matrix, 1]
+                ev1 = (a1 + b1) / 2 - (1 - p) * self.rewardDisMatrix[index_in_dis_matrix, 4] - minimum_expected_reward
+                ev1 /= len(self.getNeighbors(i))
+                a2 = (1 - p) * self.rewardDisMatrix[index_in_dis_matrix, 2]
+                b2 = (1 - p) * self.rewardDisMatrix[index_in_dis_matrix, 3]
+                ev2 = (a2 + b2) / 2 - p * self.rewardDisMatrix[index_in_dis_matrix, 5] - minimum_expected_reward
+                ev2 /= len(self.getNeighbors(i))
+                return max(ev1, ev2)
+
+            if self.distribution_type == 1:
+                # beta(a,b) E(x) = a /(a + b)
+                ev1 = p * self.rewardDisMatrix[index_in_dis_matrix, 0] \
+                      / (self.rewardDisMatrix[index_in_dis_matrix, 0] + self.rewardDisMatrix[index_in_dis_matrix, 1]) \
+                      - (1 - p) * self.rewardDisMatrix[index_in_dis_matrix, 4] - minimum_expected_reward
+                ev1 /= len(self.getNeighbors(i))
+                ev2 = p * self.rewardDisMatrix[index_in_dis_matrix, 2] \
+                      / (self.rewardDisMatrix[index_in_dis_matrix, 2] + self.rewardDisMatrix[index_in_dis_matrix, 3]) \
+                      - p * self.rewardDisMatrix[index_in_dis_matrix, 5] - minimum_expected_reward
+                ev2 /= len(self.getNeighbors(i))
+
+                return max(ev1, ev2)
+
+        else:
+            # TO-DO
+            # if target has not reached the connection limitation
+            # Lambda should be calculated with different equations
+            if self.distribution_type == 0:
+                # U(a1,b1) U(a2,b2)
+                a1 = p * self.rewardDisMatrix[index_in_dis_matrix, 0]
+                b1 = p * self.rewardDisMatrix[index_in_dis_matrix, 1]
+                ev1 = (a1 + b1) / 2 - (1 - p) * self.rewardDisMatrix[index_in_dis_matrix, 4]
+                ev1 = (ev1 - mean_expected_value) / (len(self.getNeighbors(i)) + 1)
+                a2 = (1 - p) * self.rewardDisMatrix[index_in_dis_matrix, 2]
+                b2 = (1 - p) * self.rewardDisMatrix[index_in_dis_matrix, 3]
+                ev2 = (a2 + b2) / 2 - p * self.rewardDisMatrix[index_in_dis_matrix, 5]
+                ev2 = (ev2 - mean_expected_value) / (len(self.getNeighbors(i)) + 1)
+                return max(ev1, ev2)
+
+            if self.distribution_type == 1:
+                # beta(a,b)
+                ev1 = p * self.rewardDisMatrix[index_in_dis_matrix, 0] \
+                      / (self.rewardDisMatrix[index_in_dis_matrix, 0] + self.rewardDisMatrix[index_in_dis_matrix, 1]) \
+                      - (1 - p) * self.rewardDisMatrix[index_in_dis_matrix, 4]
+                ev1 = (ev1 - mean_expected_value) / (len(self.getNeighbors(i)) + 1)
+                ev2 = p * self.rewardDisMatrix[index_in_dis_matrix, 2] \
+                    / (self.rewardDisMatrix[index_in_dis_matrix, 2] + self.rewardDisMatrix[index_in_dis_matrix, 3]) \
+                    - p * self.rewardDisMatrix[index_in_dis_matrix, 5]
+                ev2 = (ev2 - mean_expected_value) / (len(self.getNeighbors(i)) + 1)
+
+                return max(ev1, ev2)
 
     # get the expected reward list for set S
     def calculateExpectedRewardInS(self, i):
@@ -890,21 +997,13 @@ class MixEnv(object):
 
             # additionally random initialize the strategy of agents, 10% random, 10% Never, 30% HE, and 50 % Optimal
             N.node[i]['rewiring_strategy'] = self.rewiring_strategy
-            ran = random.uniform(0, 1)
-            if ran <= 0.33:
-                N.node[i]['rewiring_strategy'] = 0
-            elif ran <= 0.66:
-                N.node[i]['rewiring_strategy'] = 1
-            # elif ran <= 0.6:
-            #     N.node[i]['rewiring_strategy'] = 2
-            # elif ran <= 0.8:
-            #     N.node[i]['rewiring_strategy'] = 3
-            else:
-                N.node[i]['rewiring_strategy'] = 4
-            # if ran <= self.rewiring_strategy:
+            # ran = random.uniform(0, 1)
+            # if ran < 0.33:
+            #     N.node[i]['rewiring_strategy'] = 0
+            # elif ran < 0.66:
             #     N.node[i]['rewiring_strategy'] = 1
             # else:
-            #     N.node[i]['rewiring_strategy'] = 4
+            #     N.node[i]['rewiring_strategy'] = 2
 
             # 0 for BR, 1 for WoLF, 2 for JAL
             N.node[i]['gaming_strategy'] = 0
@@ -916,13 +1015,6 @@ class MixEnv(object):
             #     N.node[i]['gaming_strategy'] = 2
 
             N.node[i]['max_conn_num'] = self.init_conn_num
-
-        # addition
-        # N.node[0]['rewiring_strategy'] = 0
-        # N.node[1]['rewiring_strategy'] = 1
-        # N.node[2]['rewiring_strategy'] = 2
-        # N.node[3]['rewiring_strategy'] = 3
-        # N.node[4]['rewiring_strategy'] = 4
 
         return N
 
@@ -1057,24 +1149,3 @@ class MixEnv(object):
             print('Group lowest reward: ' + str(min(group_reward)))
 
         return group_reward, group_rewiring
-
-    def printAgentInfoEveryStg(self):
-        s0 = []
-        s1 = []
-        s2 = []
-        s3 = []
-        s4 = []
-
-        for agent in self.network.nodes():
-            if self.network.node[agent]['rewiring_strategy'] == 0:
-                s0.append(self.network.node[agent]['ar'] - self.network.node[agent]['ac'])
-            if self.network.node[agent]['rewiring_strategy'] == 1:
-                s1.append(self.network.node[agent]['ar'] - self.network.node[agent]['ac'])
-            if self.network.node[agent]['rewiring_strategy'] == 2:
-                s2.append(self.network.node[agent]['ar'] - self.network.node[agent]['ac'])
-            if self.network.node[agent]['rewiring_strategy'] == 3:
-                s3.append(self.network.node[agent]['ar'] - self.network.node[agent]['ac'])
-            if self.network.node[agent]['rewiring_strategy'] == 4:
-                s4.append(self.network.node[agent]['ar'] - self.network.node[agent]['ac'])
-
-        return s0, s1, s2, s3, s4

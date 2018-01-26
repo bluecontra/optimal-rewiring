@@ -1,4 +1,4 @@
-import envs.BasicEnv as Env
+import envs.OriginEnv as Env
 import random
 # Params
 INTERACTION_ROUND = 1000
@@ -10,9 +10,9 @@ NEIGHBORHOOD_SIZE = 12
 REWIRING_COST = 20
 REWIRING_PROBABILITY = 0.01
 
-K = 2
+K = 4
 
-REWIRING_STRATEGY = 0
+REWIRING_STRATEGY = 4
 
 NETWORK_TYPE = 0
 DISTRIBUTION_TYPE = 0
@@ -33,7 +33,7 @@ if __name__ == '__main__':
             print('Episode: ' + str(repeat))
 
         # init Env
-        env = Env.BasicEnv(AGENT_NUM,
+        env = Env.OriginEnv(AGENT_NUM,
                            NETWORK_TYPE,
                            BANDWIDTH,
                            NEIGHBORHOOD_SIZE,
