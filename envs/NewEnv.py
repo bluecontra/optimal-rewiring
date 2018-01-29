@@ -110,17 +110,21 @@ class NewEnv(object):
 
         maximum_expected_reward = self.calculateUpperBound(i)
         minimum_expected_reward, sec_minimum_expected_reward = self.calculateBaselines(i)
+        mean_expected_reward = self.calculateMean(i)
         # ev_m = max(self.network.node[i]['expected_value_list_S_']) > max(self.network.node[i]['expected_value_list_BL'])
         max_v_S_ = 0 if self.network.node[i]['expected_value_list_S_'] == [] \
             else max(self.network.node[i]['expected_value_list_S_'])
         max_v_BL = 0 if self.network.node[i]['expected_value_list_BL'] == [] \
             else max(self.network.node[i]['expected_value_list_BL'])
+        # if self.network.node[i]['expected_value_list_BL'] == []:
         if max_v_S_> max_v_BL:
+            # ev_m = max_v_S_ - mean_expected_reward
             ev_m = max_v_S_ - minimum_expected_reward
             # ev_m = max_v_S_
             ev_max_index = np.array(self.network.node[i]['expected_value_list_S_']).argmax()
             rewiring_target = self.network.node[i]['S_'][ev_max_index]
         else:
+            # ev_m = max_v_BL - mean_expected_reward
             ev_m = max_v_BL - minimum_expected_reward
             # ev_m = max_v_BL
             ev_max_index = np.array(self.network.node[i]['expected_value_list_BL']).argmax()
@@ -313,7 +317,7 @@ class NewEnv(object):
 
         maximum_expected_reward = self.calculateUpperBound(target)
         minimum_expected_reward, sec_minimum_expected_reward = self.calculateBaselines(target)
-        cohere = self.network.node[target]['max_conn_num'] - len(self.getNeighbors(target)) + 1
+        mean_expected_reward = self.calculateMean(target)
 
         # accept at random
         if rewiring_strategy == 0:
@@ -329,14 +333,16 @@ class NewEnv(object):
                 expected_value = max(p * game[0,0] + (1 - p) * game[0,1], p * game[1,0] + (1 - p) * game[1,1])
                 # return 1 if expected_value * self.rewiring_sight + self.rewiring_cost > 0 else 0
                 # return 1 if expected_value * self.rewiring_sight > 0 else 0
+                # return 1 if (expected_value - mean_expected_reward) * self.rewiring_sight > 0 else 0
                 return 1 if (expected_value - minimum_expected_reward) * self.rewiring_sight > 0 else 0
                 # return 1 if expected_value * self.rewiring_sight > self.rewiring_cost / 2 else 0
             # if unknown agent
             # if i in self.network.node[target]['S_']:
             HE_value = self.calculateHEValue(target, i)
             # return 1 if HE_value * self.rewiring_sight + self.rewiring_cost > 0 else 0
-            # return 1 if (HE_value - minimum_expected_reward) * self.rewiring_sight > 0 else 0
-            return 1 if HE_value * self.rewiring_sight > 0 else 0
+            return 1 if (HE_value - minimum_expected_reward) * self.rewiring_sight > 0 else 0
+            # return 1 if (HE_value - mean_expected_reward) * self.rewiring_sight > 0 else 0
+            # return 1 if HE_value * self.rewiring_sight > 0 else 0
             # return 1 if HE_value * self.rewiring_sight > self.rewiring_cost / 2 else 0
 
         if rewiring_strategy == 2:

@@ -4,7 +4,7 @@ import numpy as np
 import utils as ut
 
 
-class LearningEnv(object):
+class BasicEnv(object):
     def __init__(self, agent_num, network_type,
                  init_conn_num,
                  neighborhood_size,
@@ -177,7 +177,13 @@ class LearningEnv(object):
 
         maximum_expected_reward = self.calculateUpperBound(i)
         minimum_expected_reward, sec_minimum_expected_reward = self.calculateBaselines(i)
-        compare_value = minimum_expected_reward if rewiring_strategy == 2 else maximum_expected_reward
+        mean_expected_value = self.calculateMean(i)
+        if rewiring_strategy == 2:
+            compare_value = minimum_expected_reward
+        elif rewiring_strategy == 3:
+            compare_value = maximum_expected_reward
+        else:
+            compare_value = mean_expected_value
 
         max_v_S_ = -1 if self.network.node[i]['index_z_value_list'] == [] \
             else max(self.network.node[i]['index_z_value_list'])
@@ -196,7 +202,19 @@ class LearningEnv(object):
             rewiring_target = self.network.node[i]['BL'][ev_max_index]
 
         # check if the rewiring target accept the proposal
-        if ev_m * self.rewiring_sight > self.rewiring_cost:
+        # NEW
+        if rewiring_strategy == 2:
+            sight = self.network.node[i]['max_conn_num'] - len(self.getNeighbors(i)) + 1
+        elif rewiring_strategy == 3:
+            sight = self.network.node[i]['max_conn_num'] * 2 - len(self.getNeighbors(i)) + 1
+        else:
+            sight = self.network.node[i]['max_conn_num'] * 1.5 - len(self.getNeighbors(i)) + 1
+        # print('my sight,', sight)
+        # print(ev_m)
+        # print(ev_m * sight)
+        if ev_m * sight * self.rewiring_sight > self.rewiring_cost:
+        # if ev_m * sight * self.rewiring_sight / 2 > self.rewiring_cost:
+            # print('propose rewiring...')
             if self._getRewiringResponse(rewiring_target, i) == 1:
                 # do rewiring
                 # unlink the worst neighbor if reach the limitation
@@ -303,11 +321,12 @@ class LearningEnv(object):
 
     # get rewiring response from target for i
     def _getRewiringResponse(self, target, i):
+        # print('asking response...')
         rewiring_strategy = self.network.node[target]['rewiring_strategy']
 
         maximum_expected_reward = self.calculateUpperBound(target)
         minimum_expected_reward, sec_minimum_expected_reward = self.calculateBaselines(target)
-        cohere = self.network.node[target]['max_conn_num'] - len(self.getNeighbors(target)) + 1
+        sight = self.network.node[target]['max_conn_num'] - len(self.getNeighbors(target)) + 1
 
         # accept at random
         if rewiring_strategy == 0:
@@ -321,7 +340,8 @@ class LearningEnv(object):
                 game = self.network.edge[target][i]['game']
                 expected_value = max(p * game[0,0] + (1 - p) * game[0,1], p * game[1,0] + (1 - p) * game[1,1])
                 # return 1 if expected_value * self.rewiring_sight + self.rewiring_cost > 0 else 0
-                return 1 if expected_value * self.rewiring_sight > 0 else 0
+                return 1 if expected_value > 0 else 0
+                # return 1 if expected_value * self.rewiring_sight > 0 else 0
                 # return 1 if (expected_value - minimum_expected_reward) * self.rewiring_sight > 0 else 0
                 # return 1 if expected_value * self.rewiring_sight > self.rewiring_cost / 2 else 0
             # if unknown agent
@@ -333,11 +353,15 @@ class LearningEnv(object):
 
         if rewiring_strategy == 2:
             # if known agent
+            sight = self.network.node[target]['max_conn_num'] - len(self.getNeighbors(target)) + 1
+            # print('target sight,', sight)
             if i in self.network.node[target]['BL']:
                 game = self.network.edge[target][i]['game']
                 expected_value = max(p * game[0, 0] + (1 - p) * game[0, 1], p * game[1, 0] + (1 - p) * game[1, 1])
                 # return 1 if expected_value * self.rewiring_sight + self.rewiring_cost > 0 else 0
-                return 1 if (expected_value - minimum_expected_reward) * self.rewiring_sight  > 0 else 0
+                # return 1 if (expected_value - minimum_expected_reward) * sight * self.rewiring_sight / 2 > 0 else 0
+                return 1 if (expected_value - minimum_expected_reward) * sight * self.rewiring_sight > 0 else 0
+                # return 1 if (expected_value - minimum_expected_reward) * self.rewiring_sight  > 0 else 0
                 # return 1 if expected_value * self.rewiring_sight > self.rewiring_cost / 2 else 0
             # if unknown agent
             # TO-DO
@@ -346,16 +370,22 @@ class LearningEnv(object):
             minimum_expected_reward, sec_minimum_expected_reward = self.calculateBaselines(target)
             lamb_value = self.calculateLambdaValue(target, i, minimum_expected_reward, sec_minimum_expected_reward)
             # return 1 if lamb_value * self.rewiring_sight + self.rewiring_cost > 0 else 0
-            return 1 if lamb_value * self.rewiring_sight > 0 else 0
+            # return 1 if lamb_value * sight * self.rewiring_sight / 2 > 0 else 0
+            return 1 if lamb_value * sight * self.rewiring_sight > 0 else 0
+            # return 1 if lamb_value * self.rewiring_sight > 0 else 0
             # return 1 if lamb_value * self.rewiring_sight > self.rewiring_cost / 2 else 0
 
         if rewiring_strategy == 3:
             # if known agent
+            sight = self.network.node[target]['max_conn_num'] * 2 - len(self.getNeighbors(target)) + 1
+            # print('target sight,', sight)
             if i in self.network.node[target]['BL']:
                 game = self.network.edge[target][i]['game']
                 expected_value = max(p * game[0, 0] + (1 - p) * game[0, 1], p * game[1, 0] + (1 - p) * game[1, 1])
                 # return 1 if expected_value * self.rewiring_sight + self.rewiring_cost > 0 else 0
-                return 1 if (expected_value - maximum_expected_reward) * self.rewiring_sight > 0 else 0
+                # return 1 if (expected_value - maximum_expected_reward) * sight * self.rewiring_sight / 2 > 0 else 0
+                return 1 if (expected_value - maximum_expected_reward) * sight * self.rewiring_sight > 0 else 0
+                # return 1 if (expected_value - maximum_expected_reward) * self.rewiring_sight > 0 else 0
                 # return 1 if expected_value * self.rewiring_sight > self.rewiring_cost / 2 else 0
             # if unknown agent
             # TO-DO
@@ -366,26 +396,47 @@ class LearningEnv(object):
             lamb_value = self.calculateLambdaValueMax(target, i, maximum_expected_reward)
             # print('--op lam', lamb_value, 'max', maximum_expected_reward)
             # return 1 if lamb_value * self.rewiring_sight + self.rewiring_cost > 0 else 0
-            return 1 if lamb_value * self.rewiring_sight > 0 else 0
+            # return 1 if lamb_value * sight * self.rewiring_sight / 2> 0 else 0
+            return 1 if lamb_value * sight * self.rewiring_sight > 0 else 0
+            # return 1 if lamb_value * self.rewiring_sight > 0 else 0
             # return 1 if lamb_value * self.rewiring_sight > self.rewiring_cost / 2 else 0
 
         if rewiring_strategy == 4:
+            sight = self.network.node[target]['max_conn_num'] * 1.5 - len(self.getNeighbors(target)) + 1
+            # print('target sight,', sight)
+            mean_expected_value = self.calculateMean(target)
             # if known agent
             if i in self.network.node[target]['BL']:
                 game = self.network.edge[target][i]['game']
                 expected_value = max(p * game[0, 0] + (1 - p) * game[0, 1], p * game[1, 0] + (1 - p) * game[1, 1])
                 # return 1 if expected_value * self.rewiring_sight + self.rewiring_cost > 0 else 0
-                return 1 if (expected_value - minimum_expected_reward) * self.rewiring_sight > 0 else 0
+                # return 1 if (expected_value - mean_expected_value) * sight * self.rewiring_sight / 2 > 0 else 0
+                return 1 if (expected_value - mean_expected_value) * sight * self.rewiring_sight > 0 else 0
+                # return 1 if (expected_value - mean_expected_value) * self.rewiring_sight > 0 else 0
                 # return 1 if expected_value * self.rewiring_sight > self.rewiring_cost / 2 else 0
             # if unknown agent
             # TO-DO
             # check target connection numbers
             # if i in self.network.node[target]['S_']:
                 # minimum_expected_reward, sec_minimum_expected_reward = self.calculateBaselines(target)
-            lamb_value = self.calculateLambdaValueMax(target, i, minimum_expected_reward)
+
+            # lamb_value = self.calculateLambdaValueMax(target, i, mean_expected_value)
+            minimum_expected_reward, sec_minimum_expected_reward = self.calculateBaselines(target)
+            mean_expected_reward = self.calculateMean(target)
+            # index_z_list_S_.append(self.calculateLambdaValueMax(i, j, mean_expected_reward))
+            if len(self.getNeighbors(target)) == self.network.node[i]['max_conn_num']:
+                value = self.calculateHEValue(target, i)
+                out = (value - minimum_expected_reward) / len(self.getNeighbors(i))
+            else:
+                value = self.calculateHEValue(target, i)
+                out = (mean_expected_reward * len(self.getNeighbors(i)) + value) / (
+                len(self.getNeighbors(i)) + 1) - mean_expected_reward
+            lamb_value = out
             # print('--op lam', lamb_value, 'max', maximum_expected_reward)
             # return 1 if lamb_value * self.rewiring_sight + self.rewiring_cost > 0 else 0
-            return 1 if lamb_value * self.rewiring_sight > 0 else 0
+            # return 1 if lamb_value * sight * self.rewiring_sight / 2 > 0 else 0
+            return 1 if lamb_value * sight * self.rewiring_sight > 0 else 0
+            # return 1 if lamb_value * self.rewiring_sight > 0 else 0
             # return 1 if lamb_value * self.rewiring_sight > self.rewiring_cost / 2 else 0
 
         print('')
@@ -528,8 +579,15 @@ class LearningEnv(object):
             # origin
             elif rewiring_strategy == 4:
                 minimum_expected_reward, sec_minimum_expected_reward = self.calculateBaselines(i)
-                index_z_list_S_.append(
-                    self.calculateLambdaValueMax(i, j, minimum_expected_reward))
+                mean_expected_reward = self.calculateMean(i)
+                # index_z_list_S_.append(self.calculateLambdaValueMax(i, j, mean_expected_reward))
+                if len(self.getNeighbors(i)) == self.network.node[i]['max_conn_num']:
+                    value = self.calculateHEValue(i, j)
+                    out = (value - minimum_expected_reward) / len(self.getNeighbors(i))
+                else:
+                    value = self.calculateHEValue(i, j)
+                    out = (mean_expected_reward * len(self.getNeighbors(i)) + value) / (len(self.getNeighbors(i)) + 1) - mean_expected_reward
+                index_z_list_S_.append(out)
         return index_z_list_S_
 
     def calculateHEValueInS_(self, i):
@@ -588,6 +646,12 @@ class LearningEnv(object):
         expected_value_list = self.network.node[i]['expected_value_list']
         maximum_expected_reward = 0 if expected_value_list == [] else max(expected_value_list)
         return maximum_expected_reward
+
+    def calculateMean(self, i):
+        self.network.node[i]['expected_value_list'] = self.calculateExpectedRewardInS(i)
+        expected_value_list = self.network.node[i]['expected_value_list']
+        mean_expected_reward = 0 if expected_value_list == [] else sum(expected_value_list)/ len(expected_value_list)
+        return mean_expected_reward
 
     def calculateBaselines(self, i):
         # 1) get the maximum(minimum) expected value in S
@@ -839,15 +903,15 @@ class LearningEnv(object):
         return q
 
     def _updateAvgPolicy(self, avg_pol, pol, count):
-        return avg_pol + 1 / count * (pol - avg_pol)
-        # return avg_pol * 99 / 100 + pol / 100
+        return avg_pol * 99 / 100 + pol / 100
+        # return avg_pol + 1 / count * (pol - avg_pol)
 
     def _updatePolicy(self, q, op_pol, pol, avg_pol, delta_w, delta_l):
         q_a = (op_pol * q[0, 0] + (1 - op_pol) * q[0, 1])
         q_b = (op_pol * q[0, 2] + (1 - op_pol) * q[0, 3])
         expect_value_current = pol * q_a + (1 - pol) * q_b
         expect_value_avg = avg_pol * q_a + (1 - avg_pol) * q_b
-        delta = delta_w if expect_value_current >= expect_value_avg else delta_l
+        delta = delta_w if expect_value_current > expect_value_avg else delta_l
 
         return min(pol + delta, 1.0) if q_a >= q_b else max(pol - delta, 0.0)
 
@@ -905,6 +969,12 @@ class LearningEnv(object):
 
             # 0 for BR, 1 for WoLF, 2 for JAL
             N.node[i]['gaming_strategy'] = self.learning_strategy
+            # init game_strategy
+            # ran = random.uniform(0, 1)
+            # if ran <= 1 / 3:
+            #     N.node[i]['gaming_strategy'] = 1
+            # elif ran <= 2 / 3:
+            #     N.node[i]['gaming_strategy'] = 2
 
             N.node[i]['max_conn_num'] = self.init_conn_num
 
@@ -986,6 +1056,7 @@ class LearningEnv(object):
         self.network.edge[i][j]['alpha_value'] = [al, al2]
 
         self.network.edge[i][j]['policy_pair'] = [0.5, 0.5]
+        # self.network.edge[i][j]['avg_policy_pair'] = [0.5, 0.5]
         self.network.edge[i][j]['avg_policy_pair'] = [0.0, 0.0]
 
         # q_table_pair = np.array([[0.0,0.0], [0.0,0.0]])
@@ -993,7 +1064,7 @@ class LearningEnv(object):
         q_table_pair = np.matrix(q_table_pair)
         self.network.edge[i][j]['q-table_pair'] = q_table_pair
         self.network.edge[i][j]['e-epsilon'] = 1.0
-        self.network.edge[i][j]['alpha'] = 0.1
+        self.network.edge[i][j]['alpha'] = 0.2
         self.network.edge[i][j]['count'] = 0
 
         self.network.edge[i][j]['delta_w'] = 0.0001
@@ -1041,3 +1112,11 @@ class LearningEnv(object):
             print('Group lowest reward: ' + str(min(group_reward)))
 
         return group_reward, group_rewiring
+
+    def getInteractionPayoff(self):
+        inter_reward = []
+
+        for agent in self.network.nodes():
+            inter_reward.append(self.network.node[agent]['ar'])
+
+        return inter_reward

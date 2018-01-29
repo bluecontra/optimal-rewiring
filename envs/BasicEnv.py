@@ -369,19 +369,21 @@ class BasicEnv(object):
             # return 1 if lamb_value * self.rewiring_sight > self.rewiring_cost / 2 else 0
 
         if rewiring_strategy == 4:
+            mean_expected_value = self.calculateMean(target)
             # if known agent
             if i in self.network.node[target]['BL']:
                 game = self.network.edge[target][i]['game']
                 expected_value = max(p * game[0, 0] + (1 - p) * game[0, 1], p * game[1, 0] + (1 - p) * game[1, 1])
                 # return 1 if expected_value * self.rewiring_sight + self.rewiring_cost > 0 else 0
-                return 1 if (expected_value - minimum_expected_reward) * self.rewiring_sight > 0 else 0
+                return 1 if (expected_value - mean_expected_value) * self.rewiring_sight > 0 else 0
                 # return 1 if expected_value * self.rewiring_sight > self.rewiring_cost / 2 else 0
             # if unknown agent
             # TO-DO
             # check target connection numbers
             # if i in self.network.node[target]['S_']:
                 # minimum_expected_reward, sec_minimum_expected_reward = self.calculateBaselines(target)
-            lamb_value = self.calculateLambdaValueMax(target, i, minimum_expected_reward)
+
+            lamb_value = self.calculateLambdaValueMax(target, i, mean_expected_value)
             # print('--op lam', lamb_value, 'max', maximum_expected_reward)
             # return 1 if lamb_value * self.rewiring_sight + self.rewiring_cost > 0 else 0
             return 1 if lamb_value * self.rewiring_sight > 0 else 0
@@ -524,8 +526,9 @@ class BasicEnv(object):
             # origin
             elif rewiring_strategy == 4:
                 minimum_expected_reward, sec_minimum_expected_reward = self.calculateBaselines(i)
+                mean_expected_reward = self.calculateMean(i)
                 index_z_list_S_.append(
-                    self.calculateLambdaValueMax(i, j, minimum_expected_reward))
+                    self.calculateLambdaValueMax(i, j, mean_expected_reward))
         return index_z_list_S_
 
     def calculateHEValueInS_(self, i):
@@ -584,6 +587,12 @@ class BasicEnv(object):
         expected_value_list = self.network.node[i]['expected_value_list']
         maximum_expected_reward = 0 if expected_value_list == [] else max(expected_value_list)
         return maximum_expected_reward
+
+    def calculateMean(self, i):
+        self.network.node[i]['expected_value_list'] = self.calculateExpectedRewardInS(i)
+        expected_value_list = self.network.node[i]['expected_value_list']
+        mean_expected_reward = 0 if expected_value_list == [] else sum(expected_value_list)/ len(expected_value_list)
+        return mean_expected_reward
 
     def calculateBaselines(self, i):
         # 1) get the maximum(minimum) expected value in S
