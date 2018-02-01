@@ -3,9 +3,9 @@ import random
 # Params
 INTERACTION_ROUND = 1000
 
-AGENT_NUM = 500
-BANDWIDTH = 8
-NEIGHBORHOOD_SIZE = 16
+AGENT_NUM = 100
+BANDWIDTH = 4
+NEIGHBORHOOD_SIZE = 12
 
 REWIRING_COST = 30
 REWIRING_PROBABILITY = 0.01
@@ -13,6 +13,7 @@ REWIRING_PROBABILITY = 0.01
 K = 1
 
 REWIRING_STRATEGY = 4
+LEARNING_STRATEGY = 0
 
 NETWORK_TYPE = 0
 DISTRIBUTION_TYPE = 0
@@ -53,6 +54,7 @@ if __name__ == '__main__':
                            REWIRING_PROBABILITY,
                            DISTRIBUTION_TYPE,
                            REWIRING_STRATEGY,
+                           LEARNING_STRATEGY,
                            K)
 
         phi = env.phi

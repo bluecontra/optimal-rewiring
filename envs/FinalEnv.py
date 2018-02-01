@@ -206,9 +206,13 @@ class BasicEnv(object):
         if rewiring_strategy == 2:
             sight = self.network.node[i]['max_conn_num'] - len(self.getNeighbors(i)) + 1
         elif rewiring_strategy == 3:
-            sight = self.network.node[i]['max_conn_num'] * 2 - len(self.getNeighbors(i)) + 1
+            # sight = self.network.node[i]['max_conn_num'] * 2 - len(self.getNeighbors(i)) + 1
+            sight = self.network.node[i]['max_conn_num'] * 2 - len(self.getNeighbors(i))
         else:
+            # sight = 100000000000
+            # sight = self.network.node[i]['max_conn_num'] * 5 - len(self.getNeighbors(i))
             sight = self.network.node[i]['max_conn_num'] * 1.5 - len(self.getNeighbors(i)) + 1
+            # sight = self.network.node[i]['max_conn_num'] * 1.5 - len(self.getNeighbors(i))
         # print('my sight,', sight)
         # print(ev_m)
         # print(ev_m * sight)
@@ -377,7 +381,8 @@ class BasicEnv(object):
 
         if rewiring_strategy == 3:
             # if known agent
-            sight = self.network.node[target]['max_conn_num'] * 2 - len(self.getNeighbors(target)) + 1
+            sight = self.network.node[target]['max_conn_num'] * 2 - len(self.getNeighbors(target))
+            # sight = self.network.node[target]['max_conn_num'] * 2 - len(self.getNeighbors(target)) + 1
             # print('target sight,', sight)
             if i in self.network.node[target]['BL']:
                 game = self.network.edge[target][i]['game']
@@ -402,7 +407,10 @@ class BasicEnv(object):
             # return 1 if lamb_value * self.rewiring_sight > self.rewiring_cost / 2 else 0
 
         if rewiring_strategy == 4:
+            # sight = self.network.node[target]['max_conn_num'] * 1.5 - len(self.getNeighbors(target))
             sight = self.network.node[target]['max_conn_num'] * 1.5 - len(self.getNeighbors(target)) + 1
+            # sight = self.network.node[target]['max_conn_num'] * 5 - len(self.getNeighbors(target))
+            # sight = 10000000000
             # print('target sight,', sight)
             mean_expected_value = self.calculateMean(target)
             # if known agent
